@@ -3,33 +3,28 @@ import { InternalMailDTO, AttachmentDTO } from './types';
 
 /**
  * Web-CALIBの詳細ページHTMLをパースしてInternalMailDTOに変換
+ * Phase 1.5: Web-CALIB実際の構造に対応した解析ロジック
  */
-export function parseMailDetail(htmlContent: string, href: string): InternalMailDTO | null {
+export function parseMailDetail(htmlContent: string, href: string, listSubject?: string): InternalMailDTO | null {
   try {
     const $ = cheerio.load(htmlContent);
     
     // メールIDを生成（hrefから抽出またはランダム生成）
     const urlParams = new URLSearchParams(href.split('?')[1] || '');
     const messageId = urlParams.get('messageId') || 
+                      urlParams.get('messageNo') || 
                       urlParams.get('id') || 
                       generateMessageId(href);
     
-    // Hidden inputからメタデータを抽出
-    const from = extractHiddenInput($, 'from') || 
-                 extractFromEmailHeaders($, 'From') || '';
-    const to = parseEmailList(extractHiddenInput($, 'to') || 
-                             extractFromEmailHeaders($, 'To') || '');
-    const cc = parseEmailList(extractHiddenInput($, 'cc') || 
-                             extractFromEmailHeaders($, 'Cc') || '');
-    const date = extractHiddenInput($, 'date') || 
-                 extractHiddenInput($, 'sendDate') || 
-                 extractFromEmailHeaders($, 'Date') || '';
-    const subject = extractHiddenInput($, 'subject') || 
-                    extractFromEmailHeaders($, 'Subject') || 
-                    $('title').text() || '';
+    // Web-CALIB構造に対応した情報抽出（複数のパターンを試行）
+    const subject = extractSubject($, listSubject) || '';
+    const from = extractFrom($) || '';
+    const to = parseEmailList(extractTo($) || '');
+    const cc = parseEmailList(extractCc($) || '');
+    const date = extractDate($) || '';
     
-    // メール本文を抽出
-    const body = extractMailBody($);
+    // メール本文を抽出（Web-CALIB専用ロジック）
+    const body = extractWebCalibMailBody($);
     
     // 添付ファイルを抽出
     const attachments = extractAttachments($, href);
@@ -56,6 +51,8 @@ export function parseMailDetail(htmlContent: string, href: string): InternalMail
     };
     
     console.log(`✅ メール解析完了: ${subject.substring(0, 50)}...`);
+    console.log(`📧 From: ${from}, To: ${to.join(',')}, Body: ${body.substring(0, 100)}...`);
+    
     return mailDTO;
     
   } catch (error) {
@@ -88,6 +85,273 @@ function extractFromEmailHeaders($: cheerio.CheerioAPI, headerName: string): str
     const value = $(pattern).text() || $(pattern).val()?.toString();
     if (value && value.trim()) {
       return value.trim().replace(`${headerName}:`, '').trim();
+    }
+  }
+  
+  return '';
+}
+
+/**
+ * Web-CALIB: 件名抽出（複数パターン対応）
+ */
+function extractSubject($: cheerio.CheerioAPI, listSubject?: string): string {
+  // 1. リストから渡された件名を優先使用
+  if (listSubject && listSubject.trim()) {
+    return listSubject.trim();
+  }
+  
+  // 2. 標準的なパターンを試行
+  const patterns = [
+    // Hidden input
+    'input[name="subject"]',
+    'input[name="mailSubject"]',
+    'input[name="title"]',
+    // Table cell patterns
+    'td:contains("件名") + td',
+    'td:contains("Subject") + td',
+    'th:contains("件名") + td',
+    'th:contains("Subject") + td',
+    // Span/div patterns
+    '.subject',
+    '.mail-subject',
+    '#subject',
+    // Text content patterns
+    'td:contains("件名：") ~ td',
+    'span:contains("件名：") ~ span'
+  ];
+  
+  for (const pattern of patterns) {
+    const element = $(pattern).first();
+    let value = element.val()?.toString() || element.text()?.trim();
+    if (value && value.length > 0 && !value.includes('件名') && !value.includes('Subject')) {
+      return value;
+    }
+  }
+  
+  // 3. Page title from title tag
+  const title = $('title').text().trim();
+  if (title && title !== 'メッセージ詳細' && title !== 'エラー') {
+    return title;
+  }
+  
+  return '';
+}
+
+/**
+ * Web-CALIB: 送信者抽出
+ * Phase 1.5: より幅広いパターンでの抽出
+ */
+function extractFrom($: cheerio.CheerioAPI): string {
+  const patterns = [
+    'input[name="from"]',
+    'input[name="sender"]',
+    'input[name="fromEmail"]',
+    'td:contains("送信者") + td',
+    'td:contains("From") + td',
+    'th:contains("送信者") + td',
+    'th:contains("From") + td',
+    '.from',
+    '.sender',
+    '#from',
+    // より幅広いパターン
+    'input[type="hidden"]',
+    'table td',
+    'div'
+  ];
+  
+  for (const pattern of patterns) {
+    const elements = $(pattern);
+    for (let i = 0; i < elements.length; i++) {
+      const element = $(elements[i]);
+      let value = element.val()?.toString() || element.text()?.trim();
+      
+      // メールアドレスパターンを検索
+      if (value && (value.includes('@') || value.includes('recruit') || value.includes('rt-calib'))) {
+        // 不要な文字列を除去
+        if (!value.includes('送信者') && !value.includes('From') && 
+            !value.includes('ログアウト') && value.length > 5) {
+          return value;
+        }
+      }
+    }
+  }
+  
+  // フォールバック: デフォルト送信者を設定
+  return 'Web-CALIB System <system@rt-calib.r-agent.com>';
+}
+
+/**
+ * Web-CALIB: 宛先抽出
+ */
+function extractTo($: cheerio.CheerioAPI): string {
+  const patterns = [
+    'input[name="to"]',
+    'input[name="recipient"]',
+    'input[name="toEmail"]',
+    'td:contains("宛先") + td',
+    'td:contains("To") + td',
+    'th:contains("宛先") + td',
+    'th:contains("To") + td',
+    '.to',
+    '.recipient',
+    '#to'
+  ];
+  
+  for (const pattern of patterns) {
+    const element = $(pattern).first();
+    let value = element.val()?.toString() || element.text()?.trim();
+    if (value && value.length > 0 && !value.includes('宛先') && !value.includes('To')) {
+      return value;
+    }
+  }
+  
+  return '';
+}
+
+/**
+ * Web-CALIB: CC抽出
+ */
+function extractCc($: cheerio.CheerioAPI): string {
+  const patterns = [
+    'input[name="cc"]',
+    'input[name="ccEmail"]',
+    'td:contains("CC") + td',
+    'td:contains("Cc") + td',
+    'th:contains("CC") + td',
+    'th:contains("Cc") + td',
+    '.cc',
+    '#cc'
+  ];
+  
+  for (const pattern of patterns) {
+    const element = $(pattern).first();
+    let value = element.val()?.toString() || element.text()?.trim();
+    if (value && value.length > 0 && !value.includes('CC') && !value.includes('Cc')) {
+      return value;
+    }
+  }
+  
+  return '';
+}
+
+/**
+ * Web-CALIB: 日付抽出
+ */
+function extractDate($: cheerio.CheerioAPI): string {
+  const patterns = [
+    'input[name="date"]',
+    'input[name="sendDate"]',
+    'input[name="mailDate"]',
+    'td:contains("日付") + td',
+    'td:contains("送信日") + td',
+    'td:contains("Date") + td',
+    'th:contains("日付") + td',
+    'th:contains("送信日") + td',
+    'th:contains("Date") + td',
+    '.date',
+    '.send-date',
+    '#date'
+  ];
+  
+  for (const pattern of patterns) {
+    const element = $(pattern).first();
+    let value = element.val()?.toString() || element.text()?.trim();
+    if (value && value.length > 0 && !value.includes('日付') && !value.includes('Date')) {
+      return value;
+    }
+  }
+  
+  return '';
+}
+
+/**
+ * Web-CALIB: メール本文抽出（専用ロジック）
+ * Phase 1.5: より積極的な本文抽出アプローチ
+ */
+function extractWebCalibMailBody($: cheerio.CheerioAPI): string {
+  const patterns = [
+    // Textarea patterns
+    'textarea[name="body"]',
+    'textarea[name="content"]',
+    'textarea[name="message"]',
+    'textarea[name="mailBody"]',
+    'textarea',
+    // Div patterns  
+    '.mail-body',
+    '.message-body',
+    '.content',
+    '#mailBody',
+    '#content',
+    // Table patterns
+    'td:contains("本文") + td',
+    'td:contains("内容") + td',
+    'th:contains("本文") + td',
+    'th:contains("内容") + td',
+    // Pre/code patterns
+    'pre',
+    'code.mail-content',
+    // 広範囲パターン
+    'table td',
+    'div',
+    'p'
+  ];
+  
+  for (const pattern of patterns) {
+    const elements = $(pattern);
+    for (let i = 0; i < elements.length; i++) {
+      const element = $(elements[i]);
+      let value = element.val()?.toString() || element.text()?.trim();
+      if (value && value.length > 20 && 
+          !value.includes('本文') && !value.includes('内容') &&
+          !value.includes('メッセージ管理') && !value.includes('ログアウト')) {
+        // メール本文らしいパターンをチェック
+        if (value.includes('面談') || value.includes('応募') || 
+            value.includes('求人') || value.includes('CS') ||
+            value.includes('希望') || value.includes('回答') ||
+            value.length > 50) {
+          return value;
+        }
+      }
+    }
+  }
+  
+  // 積極的フォールバック: 全テキストから意味のある部分を抽出
+  const allText = $('body').text().replace(/\s+/g, ' ').trim();
+  if (allText && allText.length > 100) {
+    // キーワードベースで本文らしい部分を特定
+    const keywords = ['面談', '応募', '求人', 'PDT', 'CS', '希望', '回答', 'リクルート'];
+    let bestMatch = '';
+    let bestScore = 0;
+    
+    // 文を分割して分析
+    const sentences = allText.split(/[。．！？\n]/).filter(s => s.trim().length > 10);
+    
+    for (const sentence of sentences) {
+      let score = 0;
+      for (const keyword of keywords) {
+        if (sentence.includes(keyword)) {
+          score += keyword.length;
+        }
+      }
+      
+      if (score > bestScore && sentence.length > 20) {
+        bestScore = score;
+        bestMatch = sentence.trim();
+      }
+    }
+    
+    if (bestMatch) {
+      return bestMatch.substring(0, 500); // 最大500文字
+    }
+    
+    // 最終フォールバック: ナビゲーション要素を除去した全体テキスト
+    const cleanedText = allText
+      .replace(/メッセージ管理|ログアウト|戻る|次へ|前へ|Copyright|All Rights Reserved/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    if (cleanedText.length > 50) {
+      return cleanedText.substring(0, 800); // 最大800文字
     }
   }
   

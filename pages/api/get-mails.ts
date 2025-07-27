@@ -1,4 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+// 簡易ストレージの利用
+import { getAllMessages, searchMessages, getStorageStats } from '../../lib/simple-storage';
 
 /**
  * メール一覧レスポンス型定義 (Ultra AI & Dash AI方式を参考)
@@ -40,7 +42,7 @@ interface GetMailsQuery {
 }
 
 /**
- * ca-support2からメール一覧を取得 (Ultra AI方式を参考)
+ * 簡易ストレージからメール一覧を取得 (Phase 1実装)
  */
 async function fetchMailsFromCaSupport2(
   limit: number = 100,
@@ -52,59 +54,63 @@ async function fetchMailsFromCaSupport2(
   } = {}
 ): Promise<MailListResponse['data']> {
   try {
-    // TODO: 実際のca-support2データベース接続
-    // 現在はプレースホルダー実装（参考事例に基づいたダミーデータ）
+    // Phase 1: 簡易ストレージから実際のメールデータを取得
+    console.log('📧 簡易ストレージからメールデータを取得中...');
     
-    const dummyMails = [
-      {
-        id: 'webcalib-001',
-        subject: 'PDT求人への応募手続き依頼の連絡',
-        from: 'system@rt-calib.r-agent.com',
-        to: 'yuya_inagaki+005@r.recruit.co.jp',
-        date: '2024-01-15T10:30:00Z',
-        isRead: false,
-        threadId: 'thread-001',
-        snippet: 'PDT求人への応募に関する手続きについてご連絡いたします...',
-        labels: ['重要', 'Web-CALIB'],
-        sourceUrl: 'https://rt-calib.r-agent.com/webcalib/app/message_management33_view?messageNo=2496126158'
-      },
-      {
-        id: 'webcalib-002',
-        subject: '面談予約時のCS希望',
-        from: 'hr@rt-calib.r-agent.com',
-        to: 'yuya_inagaki+005@r.recruit.co.jp',
-        date: '2024-01-14T14:20:00Z',
-        isRead: true,
-        threadId: 'thread-002',
-        snippet: '面談予約の際のCS希望についてお知らせいたします...',
-        labels: ['面談', 'Web-CALIB'],
-        sourceUrl: 'https://rt-calib.r-agent.com/webcalib/app/message_management33_view?messageNo=2496126157'
-      },
-      {
-        id: 'webcalib-003',
-        subject: '面談希望日 回答のお願い【リクルートエー',
-        from: 'support@rt-calib.r-agent.com',
-        to: 'yuya_inagaki+005@r.recruit.co.jp',
-        date: '2024-01-13T09:15:00Z',
-        isRead: false,
-        threadId: 'thread-003',
-        snippet: '面談希望日についてのご回答をお願いいたします...',
-        labels: ['面談', 'リクルート', 'Web-CALIB'],
-        sourceUrl: 'https://rt-calib.r-agent.com/webcalib/app/message_management33_view?messageNo=2496125586'
-      }
-    ];
+    let messages = filters.search 
+      ? await searchMessages(filters.search)
+      : await getAllMessages();
 
-    // フィルタリング処理 (Dash AI方式)
-    let filteredMails = [...dummyMails];
-    
-    if (filters.search) {
-      const searchTerm = filters.search.toLowerCase();
-      filteredMails = filteredMails.filter(mail => 
-        mail.subject.toLowerCase().includes(searchTerm) ||
-        mail.from.toLowerCase().includes(searchTerm) ||
-        mail.snippet.toLowerCase().includes(searchTerm)
-      );
-    }
+    console.log(`📧 ストレージから${messages.length}件のメッセージを取得`);
+
+    // メールデータの変換（GmailLikeMessageDTO → Mail形式）
+    const convertedMails = messages.map(message => {
+      // ヘッダーから情報を抽出
+      const headers = message.payload?.headers || [];
+      const getHeader = (name: string) => headers.find(h => h.name === name)?.value || '';
+      
+      const subject = getHeader('Subject');
+      const from = getHeader('From');
+      const to = getHeader('To');
+      const dateStr = getHeader('Date') || message.internalDate;
+      
+      // メール本文の抽出（snippet優先、なければbody.dataから）
+      let snippet = message.snippet || '';
+      if (!snippet && message.payload?.body?.data) {
+        // Base64デコードを試行
+        try {
+          snippet = Buffer.from(message.payload.body.data, 'base64').toString('utf8').substring(0, 200);
+        } catch {
+          snippet = '本文を取得できませんでした';
+        }
+      }
+
+      // 元メールのURL構築（messageIdから）
+      let sourceUrl = '';
+      if (message.id && message.id.includes('webcalib-')) {
+        // メッセージIDからmessageNoを抽出
+        const parts = message.id.split('-');
+        if (parts.length >= 2) {
+          sourceUrl = `https://rt-calib.r-agent.com/webcalib/app/message_management33_view?messageNo=${parts[1]}&jobseekerNo=J025870`;
+        }
+      }
+
+      return {
+        id: message.id,
+        subject,
+        from,
+        to,
+        date: dateStr || message.createdAt,
+        isRead: true, // 一旦全て既読として扱う
+        threadId: message.threadId || 'thread-default',
+        snippet: snippet.substring(0, 200) + (snippet.length > 200 ? '...' : ''),
+        labels: ['Web-CALIB'], // 基本ラベル
+        sourceUrl
+      };
+    });
+
+    // フィルタリング処理
+    let filteredMails = [...convertedMails];
     
     if (filters.label) {
       filteredMails = filteredMails.filter(mail => 
@@ -121,18 +127,23 @@ async function fetchMailsFromCaSupport2(
     // ページネーション
     const paginatedMails = filteredMails.slice(offset, offset + limit);
     
+    // 統計情報を取得
+    const stats = await getStorageStats();
+    
+    console.log(`✅ ${paginatedMails.length}件のメールを変換完了`);
+    
     return {
       mails: paginatedMails,
       totalCount: filteredMails.length,
-      lastSyncAt: new Date().toISOString(),
+      lastSyncAt: stats.lastSyncAt,
       stats: {
         unreadCount: filteredMails.filter(mail => !mail.isRead).length,
-        totalSize: `${(filteredMails.length * 1.2).toFixed(1)} MB` // 概算
+        totalSize: stats.storageSize
       }
     };
     
   } catch (error) {
-    console.error('メール取得エラー:', error);
+    console.error('❌ メール取得エラー:', error);
     throw new Error('メールの取得に失敗しました');
   }
 }

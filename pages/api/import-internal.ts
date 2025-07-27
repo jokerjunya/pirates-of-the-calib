@@ -1,6 +1,20 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { syncWebCalibMails, validateScraperConfig } from '../../adapters/internal-mail/index';
 import type { ScraperConfig, GmailLikeThreadDTO, GmailLikeMessageDTO } from '../../adapters/internal-mail/types';
+// 簡易ストレージの利用
+import { 
+  checkExistingThread as storageCheckExistingThread,
+  checkExistingMessage as storageCheckExistingMessage,
+  saveThread as storageSaveThread,
+  saveMessage as storageSaveMessage
+} from '../../lib/simple-storage';
+
+// Phase 2: 重複削除ロジック
+import { 
+  deduplicateMessages, 
+  analyzeContentVariations,
+  generateDeduplicationReport
+} from '../../lib/content-dedup';
 
 /**
  * API レスポンス型定義
@@ -208,8 +222,37 @@ async function importToSupport2(
   try {
     console.log('🔄 Importing to ca-support2...');
 
-    // スレッドの取り込み
+    // Phase 2: 重複削除処理の適用
+    let allMessages = [...messages];
     for (const thread of threads) {
+      allMessages.push(...thread.messages);
+    }
+
+    console.log(`📧 Phase 2: ${allMessages.length}件のメッセージに対して重複削除を実行中...`);
+    const deduplicationResult = deduplicateMessages(allMessages);
+    
+    // 重複削除レポートを出力
+    const report = generateDeduplicationReport(
+      allMessages.length,
+      deduplicationResult.uniqueMessages,
+      deduplicationResult.duplicates
+    );
+    console.log(report);
+
+    // 重複削除後のメッセージでスレッドを再構築
+    const uniqueMessageMap = new Map(
+      deduplicationResult.uniqueMessages.map(msg => [msg.id, msg])
+    );
+
+    const deduplicatedThreads = threads.map(thread => ({
+      ...thread,
+      messages: thread.messages.filter(msg => uniqueMessageMap.has(msg.id))
+    })).filter(thread => thread.messages.length > 0);
+
+    console.log(`✅ 重複削除完了: ${threads.length}→${deduplicatedThreads.length}スレッド, ${allMessages.length}→${deduplicationResult.uniqueMessages.length}メッセージ`);
+
+    // スレッドの取り込み（重複削除後）
+    for (const thread of deduplicatedThreads) {
       try {
         // 重複チェック（既存のスレッドIDで確認）
         const existingThread = await checkExistingThread(thread.id);
@@ -233,8 +276,12 @@ async function importToSupport2(
       }
     }
 
-    // メッセージの取り込み
-    for (const message of messages) {
+    // メッセージの取り込み（重複削除済み）
+    const deduplicatedMessages = deduplicationResult.uniqueMessages.filter(msg => 
+      !deduplicatedThreads.some(thread => thread.messages.some(threadMsg => threadMsg.id === msg.id))
+    );
+    
+    for (const message of deduplicatedMessages) {
       try {
         // 重複チェック
         const existingMessage = await checkExistingMessage(message.id);
@@ -268,73 +315,32 @@ async function importToSupport2(
 
 /**
  * 既存スレッドの確認
- * TODO: ca-support2の実際のDB/APIに合わせて実装
+ * Phase 1: 簡易ストレージでの実装
  */
 async function checkExistingThread(threadId: string): Promise<boolean> {
-  // 実装例:
-  // const existingThread = await db.thread.findUnique({ where: { id: threadId } });
-  // return !!existingThread;
-  
-  // 一時的な実装（常に新規として扱う）
-  return false;
+  return await storageCheckExistingThread(threadId);
 }
 
 /**
  * 既存メッセージの確認
- * TODO: ca-support2の実際のDB/APIに合わせて実装
+ * Phase 1: 簡易ストレージでの実装
  */
 async function checkExistingMessage(messageId: string): Promise<boolean> {
-  // 実装例:
-  // const existingMessage = await db.message.findUnique({ where: { id: messageId } });
-  // return !!existingMessage;
-  
-  // 一時的な実装（常に新規として扱う）
-  return false;
+  return await storageCheckExistingMessage(messageId);
 }
 
 /**
  * スレッドの保存
- * TODO: ca-support2の実際のDB/APIに合わせて実装
+ * Phase 1: 簡易ストレージでの実装
  */
 async function saveThread(thread: GmailLikeThreadDTO): Promise<void> {
-  // 実装例:
-  // await db.thread.create({
-  //   data: {
-  //     id: thread.id,
-  //     subject: thread.subject,
-  //     snippet: thread.snippet,
-  //     historyId: thread.historyId,
-  //     labels: thread.labels,
-  //     // ... その他のフィールド
-  //   }
-  // });
-  
-  // 一時的な実装（ログ出力のみ）
-  console.log(`💾 Saving thread: ${thread.subject} (${thread.messages.length} messages)`);
-  
-  // メッセージも一緒に保存
-  for (const message of thread.messages) {
-    await saveMessage(message);
-  }
+  await storageSaveThread(thread);
 }
 
 /**
  * メッセージの保存
- * TODO: ca-support2の実際のDB/APIに合わせて実装
+ * Phase 1: 簡易ストレージでの実装
  */
 async function saveMessage(message: GmailLikeMessageDTO): Promise<void> {
-  // 実装例:
-  // await db.message.create({
-  //   data: {
-  //     id: message.id,
-  //     threadId: message.threadId,
-  //     snippet: message.snippet,
-  //     internalDate: message.internalDate,
-  //     payload: message.payload,
-  //     // ... その他のフィールド
-  //   }
-  // });
-  
-  // 一時的な実装（ログ出力のみ）
-  console.log(`💾 Saving message: ${message.id} in thread ${message.threadId}`);
+  await storageSaveMessage(message);
 } 

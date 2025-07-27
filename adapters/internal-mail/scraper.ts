@@ -961,8 +961,9 @@ export class WebCalibScraper {
 
   /**
    * 個別メールの詳細を取得
+   * Phase 1.5: 件名を一覧から渡すように修正
    */
-  async fetchMailDetail(href: string): Promise<InternalMailDTO | null> {
+  async fetchMailDetail(href: string, listSubject?: string): Promise<InternalMailDTO | null> {
     if (!this.page) throw new Error('Page not initialized');
     
     try {
@@ -988,7 +989,8 @@ export class WebCalibScraper {
       // HTMLコンテンツを取得してパーサーに渡す
       const htmlContent = await targetPage.content();
       
-      return parseMailDetail(htmlContent, href);
+      // Phase 1.5: 一覧から取得した件名を渡す
+      return parseMailDetail(htmlContent, href, listSubject);
       
     } catch (error) {
       console.error(`❌ メール詳細取得エラー (${href}):`, error);
@@ -1019,7 +1021,8 @@ export class WebCalibScraper {
       
       for (const mailItem of mailList) {
         try {
-          const mailDetail = await this.fetchMailDetail(mailItem.href);
+          // Phase 1.5: 件名を一覧から渡して詳細を取得
+          const mailDetail = await this.fetchMailDetail(mailItem.href, mailItem.subject);
           if (mailDetail) {
             result.mails.push(mailDetail);
             result.processedMails++;
