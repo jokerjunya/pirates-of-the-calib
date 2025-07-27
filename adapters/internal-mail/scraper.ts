@@ -19,21 +19,25 @@ export class WebCalibScraper {
    * ブラウザを起動してログイン
    */
   async initialize(): Promise<void> {
-    console.log('🚀 Playwright ブラウザを起動中（Microsoft Edge互換モード）...');
+    console.log('🚀 Playwright ブラウザを起動中（Internet Explorer互換モード）...');
     
     this.browser = await chromium.launch({
       headless: this.config.headless
     });
     
-    // Microsoft EdgeのUser-Agentを設定
+    // Internet ExplorerのUser-Agentを設定
     const context = await this.browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0'
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko',
+      // IE互換性のための追加設定
+      viewport: { width: 1366, height: 768 },
+      ignoreHTTPSErrors: true,
+      javaScriptEnabled: true
     });
     
     this.page = await context.newPage();
     this.page.setDefaultTimeout(this.config.timeout!);
     
-    console.log('🌐 Microsoft Edge User-Agent設定完了');
+          console.log('🌐 Internet Explorer User-Agent設定完了');
     
     await this.login();
   }
@@ -62,19 +66,62 @@ export class WebCalibScraper {
       
       // ログインページにアクセス
       await this.page.goto(fullLoginUrl);
-      await this.page.waitForLoadState('networkidle');
+      
+      // IE互換性のため複数の待機方法を試行
+      try {
+        await this.page.waitForLoadState('networkidle', { timeout: 10000 });
+      } catch {
+        console.log('⚠️ networkidle待機失敗、domcontentloaded で再試行...');
+        try {
+          await this.page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+        } catch {
+          console.log('⚠️ domcontentloaded待機も失敗、固定時間待機...');
+          await this.page.waitForTimeout(5000);
+        }
+      }
       
       // デバッグ: ページの状態を確認
       console.log('🔍 ページロード完了、DOM構造を確認中...');
       
-      if (!this.config.headless) {
-        // ヘッドレスモードでない場合はスクリーンショットを保存
-        try {
-          await this.page.screenshot({ path: 'debug-login-page.png', fullPage: true });
-          console.log('📸 スクリーンショット保存: debug-login-page.png');
-        } catch (error) {
-          console.log('⚠️ スクリーンショット保存失敗:', error);
-        }
+      // スクリーンショットを保存
+      try {
+        await this.page.screenshot({ path: 'debug-login-page.png', fullPage: true });
+        console.log('📸 スクリーンショット保存: debug-login-page.png');
+      } catch (error) {
+        console.log('⚠️ スクリーンショット保存失敗:', error);
+      }
+      
+      // DOM情報を取得してデバッグ
+      try {
+        const pageTitle = await this.page.title();
+        console.log('📄 ページタイトル:', pageTitle);
+        
+        // 全てのinput要素を探す
+        const allInputs = await this.page.$$eval('input', inputs => 
+          inputs.map(input => ({
+            tag: input.tagName,
+            type: input.type,
+            name: input.name,
+            id: input.id,
+            className: input.className,
+            placeholder: input.placeholder
+          }))
+        );
+        console.log('🔍 見つかったinput要素:', JSON.stringify(allInputs, null, 2));
+        
+        // 全てのform要素を探す
+        const allForms = await this.page.$$eval('form', forms => 
+          forms.map(form => ({
+            action: form.action,
+            method: form.method,
+            name: form.name,
+            id: form.id
+          }))
+        );
+        console.log('📝 見つかったform要素:', JSON.stringify(allForms, null, 2));
+        
+      } catch (error) {
+        console.log('⚠️ DOM解析エラー:', error);
       }
       
       // ログイン情報を入力（複数のセレクターを試行）
@@ -85,20 +132,27 @@ export class WebCalibScraper {
         'input[name="userId"]',
         'input[name="loginId"]',
         'input[type="text"]',
+        'input[type="TEXT"]',  // IE大文字対応
         '#accountId',
         '#username',
-        '#userId'
+        '#userId',
+        'input:first-of-type',  // 最初のinput要素
+        'form input[type="text"]',
+        'form input:first-child',
+        '[name="accountId"]',
+        '[name="username"]'
       ];
       
       let usernameInputFound = false;
       for (const selector of usernameSelectors) {
         try {
-          await this.page.waitForSelector(selector, { timeout: 5000 });
+          await this.page.waitForSelector(selector, { timeout: 2000 });
           await this.page.fill(selector, this.config.username);
           console.log(`✅ ユーザー名入力完了: ${selector}`);
           usernameInputFound = true;
           break;
         } catch {
+          console.log(`⚠️ セレクター失敗: ${selector}`);
           continue;
         }
       }
@@ -111,18 +165,22 @@ export class WebCalibScraper {
       const passwordSelectors = [
         'input[name="password"]',
         'input[type="password"]',
-        '#password'
+        'input[type="PASSWORD"]',  // IE大文字対応
+        '#password',
+        'form input[type="password"]',
+        '[name="password"]'
       ];
       
       let passwordInputFound = false;
       for (const selector of passwordSelectors) {
         try {
-          await this.page.waitForSelector(selector, { timeout: 5000 });
+          await this.page.waitForSelector(selector, { timeout: 2000 });
           await this.page.fill(selector, this.config.password);
           console.log(`✅ パスワード入力完了: ${selector}`);
           passwordInputFound = true;
           break;
         } catch {
+          console.log(`⚠️ セレクター失敗: ${selector}`);
           continue;
         }
       }
@@ -136,22 +194,30 @@ export class WebCalibScraper {
       const loginButtonSelectors = [
         'input[name="loginButton"]',
         'input[type="submit"]',
+        'input[type="SUBMIT"]',  // IE大文字対応
         'button[type="submit"]',
         'button:has-text("ログイン")',
         'input[value="ログイン"]',
+        'input[value="LOGIN"]',
+        'input[value="Login"]',
         '#loginButton',
-        '.login-button'
+        '.login-button',
+        'form input[type="submit"]',
+        'form button',
+        '[name="loginButton"]',
+        'input:last-of-type'  // 最後のinput要素（ボタンの可能性）
       ];
       
       let loginButtonFound = false;
       for (const selector of loginButtonSelectors) {
         try {
-          await this.page.waitForSelector(selector, { timeout: 5000 });
+          await this.page.waitForSelector(selector, { timeout: 2000 });
           await this.page.click(selector);
           console.log(`✅ ログインボタンクリック完了: ${selector}`);
           loginButtonFound = true;
           break;
         } catch {
+          console.log(`⚠️ セレクター失敗: ${selector}`);
           continue;
         }
       }
