@@ -324,8 +324,40 @@ export class WebCalibScraper {
       
       await this.page.waitForLoadState('networkidle');
       
-      // 4. メッセージ管理ボタンをクリック
+      // 4. メッセージ管理ボタンを探して詳細調査
       console.log('🔘 メッセージ管理ボタンを探しています...');
+      
+      // まず、ページ上の全ボタン・リンクを調査
+      try {
+        const allButtons = await this.page.$$eval('input, button, a', elements =>
+          elements.map(el => ({
+            tag: el.tagName,
+            type: el.type || '',
+            value: el.value || '',
+            text: el.textContent?.trim() || '',
+            onclick: el.onclick?.toString() || '',
+            href: el.href || '',
+            className: el.className || ''
+          })).filter(el => 
+            el.text.includes('メッセージ') || 
+            el.value.includes('メッセージ') ||
+            el.onclick.includes('message') ||
+            el.href.includes('message')
+          )
+        );
+        
+        console.log('📋 メッセージ関連のボタン・リンク一覧:');
+        allButtons.forEach((btn, i) => {
+          console.log(`  ${i + 1}. ${btn.tag} - text:"${btn.text}" value:"${btn.value}" onclick:"${btn.onclick.substring(0, 100)}"`);
+        });
+        
+        if (allButtons.length === 0) {
+          console.log('⚠️ メッセージ関連のボタンが見つかりません！');
+          console.log('💡 メッセージ管理機能は別の方法でアクセスする必要がある可能性があります');
+        }
+      } catch (error) {
+        console.log('⚠️ ボタン調査エラー:', error);
+      }
       
       const messageManagementSelectors = [
         'input[value="メッセージ管理"]',  // 最も可能性が高い
@@ -335,16 +367,35 @@ export class WebCalibScraper {
         'input[onclick*="message"]',      // onclick属性にmessageが含まれる
         'input[onclick*="Message"]',      // 大文字小文字対応
         '.message-management',
-        '#messageManagement'
+        '#messageManagement',
+        'a[href*="message_management"]',  // 新しく追加
+        'a[href*="メッセージ"]'          // 新しく追加
       ];
       
       let managementButtonFound = false;
       for (const selector of messageManagementSelectors) {
         try {
           await this.page.waitForSelector(selector, { timeout: 3000 });
+          
+          // クリック前のURL記録
+          const beforeUrl = this.page.url();
+          console.log(`🔍 クリック前URL: ${beforeUrl}`);
+          
           await this.page.click(selector);
           managementButtonFound = true;
           console.log(`✅ メッセージ管理ボタンクリック完了: ${selector}`);
+          
+          // クリック後のURL変化を確認
+          await this.page.waitForTimeout(2000); // 2秒待機
+          const afterUrl = this.page.url();
+          console.log(`🔍 クリック後URL: ${afterUrl}`);
+          
+          if (beforeUrl === afterUrl) {
+            console.log('⚠️ URLが変化していません - ページ遷移が発生していない可能性');
+          } else {
+            console.log('✅ URL変化を確認 - ページ遷移成功');
+          }
+          
           break;
         } catch {
           continue;
