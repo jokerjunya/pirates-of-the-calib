@@ -328,10 +328,12 @@ export class WebCalibScraper {
       console.log('🔘 メッセージ管理ボタンを探しています...');
       
       const messageManagementSelectors = [
+        'input[value="メッセージ管理"]',  // 最も可能性が高い
         'button:has-text("メッセージ管理")',
-        'input[value="メッセージ管理"]',
         'a:has-text("メッセージ管理")',
         'input[name="messageManagement"]',
+        'input[onclick*="message"]',      // onclick属性にmessageが含まれる
+        'input[onclick*="Message"]',      // 大文字小文字対応
         '.message-management',
         '#messageManagement'
       ];
@@ -537,12 +539,24 @@ export class WebCalibScraper {
         const rows = Array.from(table.querySelectorAll('tr'));
         console.log(`📊 ${rows.length}行見つかりました`);
         
-        // ヘッダー行を判定してスキップ
+        // ヘッダー行を判定してスキップ（強化版）
         const dataRows = rows.filter((row, index) => {
           const text = row.textContent?.toLowerCase();
+          const rowHTML = row.innerHTML?.toLowerCase();
+          
+          // 明確なヘッダー行判定
           const isHeader = text?.includes('件名') || text?.includes('日付') || 
                           text?.includes('subject') || text?.includes('date') ||
+                          text?.includes('カナ氏名') || text?.includes('氏名') ||
+                          text?.includes('▼') || text?.includes('▲') ||           // ソートボタン
+                          text?.includes('所属') || text?.includes('担当') ||
+                          rowHTML?.includes('href="#"') ||                         // 無効なリンク
                           index === 0; // 最初の行もヘッダーとして扱う
+          
+          if (isHeader) {
+            console.log(`📊 ヘッダー行をスキップ: "${text?.substring(0, 50)}..."`);
+          }
+          
           return !isHeader;
         });
         
@@ -574,16 +588,32 @@ export class WebCalibScraper {
           
           if (!linkElement) {
             console.log(`📊 行${index}: リンクが見つかりません`);
-            // デバッグ: この行の全内容を出力
-            console.log(`📊 行${index}の内容:`, row.textContent?.trim());
-            console.log(`📊 行${index}のHTML:`, row.innerHTML);
             return null;
           }
           
           const linkText = linkElement.textContent?.trim() || 'タイトル不明';
           const linkHref = linkElement.getAttribute('href') || '';
           
-          console.log(`📊 行${index}: リンク発見 - "${linkText}" (${usedSelector})`);
+          // 無効なリンクを除外
+          if (linkHref === '#' || linkHref === '' || 
+              linkText === '▼' || linkText === '▲' ||
+              linkText.includes('▼') || linkText.includes('▲')) {
+            console.log(`📊 行${index}: 無効なリンクをスキップ - "${linkText}" (${linkHref})`);
+            return null;
+          }
+          
+          // メール関連のリンクかチェック
+          const isMailLink = linkHref.includes('message_management') || 
+                            linkHref.includes('mail') || 
+                            linkHref.includes('メール') ||
+                            (linkText.length > 3 && !linkText.includes('カナ') && !linkText.includes('氏名'));
+          
+          if (!isMailLink) {
+            console.log(`📊 行${index}: メール以外のリンクをスキップ - "${linkText}"`);
+            return null;
+          }
+          
+          console.log(`📊 行${index}: ✅ 有効なメールリンク発見 - "${linkText}" (${usedSelector})`);
           console.log(`📊 行${index}: URL - ${linkHref}`);
           
           // 日付抽出の改善
@@ -614,12 +644,14 @@ export class WebCalibScraper {
       
       // 各メールの情報を詳しくログ出力
       if (mailList.length > 0) {
-        console.log('📋 発見されたメール一覧:');
+        console.log('📋 ✅ 有効なメール一覧:');
         mailList.forEach((mail, index) => {
           console.log(`  ${index + 1}. 件名: "${mail.subject}" | 日付: "${mail.date}" | URL: "${mail.href}"`);
         });
+        console.log(`🎉 合計 ${mailList.length}件の有効なメールを発見しました！`);
       } else {
-        console.log('⚠️ メールが0件でした。ページ構造を確認してください。');
+        console.log('⚠️ 有効なメールが0件でした。ページ構造を確認してください。');
+        console.log('💡 メッセージ管理ボタンクリック後、正しいメール一覧ページに到達していない可能性があります。');
       }
       
       return mailList as Array<{subject: string, href: string, date: string}>;
