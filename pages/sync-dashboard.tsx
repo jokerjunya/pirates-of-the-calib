@@ -12,6 +12,32 @@ interface SyncStatus {
   lastSyncAt?: string;
 }
 
+// メール型定義 (Ultra AI & Event Genie方式を参考)
+interface Mail {
+  id: string;
+  subject: string;
+  from: string;
+  to: string;
+  date: string;
+  isRead: boolean;
+  threadId: string;
+  snippet: string;
+  labels: string[];
+  sourceUrl?: string;
+}
+
+// メール一覧状態型定義
+interface MailListState {
+  mails: Mail[];
+  loading: boolean;
+  totalCount: number;
+  lastSyncAt: string;
+  stats: {
+    unreadCount: number;
+    totalSize: string;
+  };
+}
+
 // 同期結果の型定義
 interface SyncResult {
   success: boolean;
@@ -46,6 +72,54 @@ export default function SyncDashboard() {
     headless: true
   });
 
+  // メール一覧状態管理 (Ultra AI方式を参考)
+  const [mailList, setMailList] = useState<MailListState>({
+    mails: [],
+    loading: false,
+    totalCount: 0,
+    lastSyncAt: '',
+    stats: {
+      unreadCount: 0,
+      totalSize: '0 MB'
+    }
+  });
+
+  // メール一覧取得関数 (Ultra AI & Dash AI方式を参考)
+  const fetchMails = async (filters: {
+    search?: string;
+    label?: string;
+    unreadOnly?: boolean;
+  } = {}) => {
+    setMailList(prev => ({ ...prev, loading: true }));
+    
+    try {
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.label) params.append('label', filters.label);
+      if (filters.unreadOnly) params.append('unreadOnly', 'true');
+      
+      const response = await fetch(`/api/get-mails?${params.toString()}`);
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        console.log(`📧 ${result.data.mails.length}件のメールを取得しました`);
+        setMailList({
+          mails: result.data.mails,
+          loading: false,
+          totalCount: result.data.totalCount,
+          lastSyncAt: result.data.lastSyncAt,
+          stats: result.data.stats
+        });
+      } else {
+        throw new Error(result.error || 'メールの取得に失敗しました');
+      }
+    } catch (error) {
+      console.error('メール取得エラー:', error);
+      setMailList(prev => ({ ...prev, loading: false }));
+      alert(`メール取得エラー: ${error instanceof Error ? error.message : '不明なエラー'}`);
+    }
+  };
+
   // 設定を環境変数から初期化
   useEffect(() => {
     setConfig({
@@ -56,6 +130,9 @@ export default function SyncDashboard() {
       jobseekerNo: process.env.NEXT_PUBLIC_WEBCALIB_JOBSEEKER_NO || '',
       headless: false  // デバッグしやすくするためブラウザ表示をデフォルトに
     });
+
+    // 初回メール取得 (Event Genie方式)
+    fetchMails();
   }, []);
 
   // 同期実行
@@ -109,6 +186,10 @@ export default function SyncDashboard() {
           currentStep: '同期完了',
           lastSyncAt: new Date().toLocaleString('ja-JP')
         }));
+
+        // 🔥 同期成功時に自動でメール一覧を更新 (Dash AI方式)
+        console.log('🔄 同期完了 - メール一覧を自動更新中...');
+        await fetchMails();
       } else {
         setSyncStatus(prev => ({
           ...prev,
@@ -304,6 +385,113 @@ export default function SyncDashboard() {
                 </>
               )}
             </button>
+          </div>
+
+          {/* メール一覧セクション (Gmail風 + Event Genie方式) */}
+          <div className="bg-white shadow rounded-lg p-6 mt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">📧 取得済みメール一覧</h2>
+              <div className="flex gap-4 items-center text-sm text-gray-600">
+                <span>📊 総数: {mailList.totalCount}件</span>
+                <span>🔔 未読: {mailList.stats.unreadCount}件</span>
+                <span>💾 容量: {mailList.stats.totalSize}</span>
+                <button 
+                  onClick={() => fetchMails()} 
+                  disabled={mailList.loading}
+                  className={`px-3 py-1 text-xs border rounded ${
+                    mailList.loading 
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                  }`}
+                >
+                  {mailList.loading ? '🔄' : '↻'} 更新
+                </button>
+              </div>
+            </div>
+
+            {mailList.loading && (
+              <div className="text-center py-8 text-gray-500">
+                🔄 メール一覧を読み込み中...
+              </div>
+            )}
+
+            {!mailList.loading && mailList.mails.length === 0 && (
+              <div className="text-center py-12 text-gray-400">
+                📭 メールがありません。同期を実行してメールを取得してください。
+              </div>
+            )}
+
+            {!mailList.loading && mailList.mails.length > 0 && (
+              <div className="space-y-2">
+                {mailList.mails.map((mail) => (
+                  <div 
+                    key={mail.id} 
+                    className={`p-4 rounded-lg border transition-all duration-200 cursor-pointer hover:shadow-md ${
+                      mail.isRead 
+                        ? 'bg-white border-gray-200' 
+                        : 'bg-blue-50 border-l-4 border-l-blue-500 border-t-gray-200 border-r-gray-200 border-b-gray-200'
+                    }`}
+                  >
+                    {/* メールヘッダー (Gmail風) */}
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-base ${mail.isRead ? 'font-normal' : 'font-bold'} text-gray-900 truncate mb-1`}>
+                          {mail.subject}
+                        </div>
+                        <div className="text-sm text-gray-600 truncate">
+                          👤 {mail.from}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 text-right ml-4 flex-shrink-0">
+                        📅 {new Date(mail.date).toLocaleDateString('ja-JP', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </div>
+                    </div>
+
+                    {/* メール概要 (Ultra AI方式) */}
+                    <div className="text-xs text-gray-600 mb-2 line-clamp-2">
+                      {mail.snippet}
+                    </div>
+
+                    {/* ラベルとアクション (Event Genie + Dash AI方式) */}
+                    <div className="flex justify-between items-center">
+                      <div className="flex gap-1 flex-wrap">
+                        {mail.labels.map((label, index) => (
+                          <span 
+                            key={index}
+                            className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full border border-blue-200"
+                          >
+                            🏷️ {label}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      {/* Event Genieのソースリンク機能 */}
+                      {mail.sourceUrl && (
+                        <a 
+                          href={mail.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                        >
+                          🔗 元メール
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {mailList.lastSyncAt && (
+              <div className="mt-4 text-xs text-gray-500 text-center">
+                📅 最終更新: {new Date(mailList.lastSyncAt).toLocaleString('ja-JP')}
+              </div>
+            )}
           </div>
 
           {/* 結果パネル */}
