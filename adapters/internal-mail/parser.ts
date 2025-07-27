@@ -139,33 +139,89 @@ function extractSubject($: cheerio.CheerioAPI, listSubject?: string): string {
 
 /**
  * Web-CALIB: 送信者抽出
- * Phase 1.5: より幅広いパターンでの抽出
+ * Phase 2: Web-CALIB詳細ページ専用の抽出ロジック
  */
 function extractFrom($: cheerio.CheerioAPI): string {
-  const patterns = [
-    'input[name="from"]',
-    'input[name="sender"]',
-    'input[name="fromEmail"]',
-    'td:contains("送信者") + td',
-    'td:contains("From") + td',
-    'th:contains("送信者") + td',
-    'th:contains("From") + td',
-    '.from',
-    '.sender',
-    '#from',
-    // より幅広いパターン
-    'input[type="hidden"]',
-    'table td',
-    'div'
+  // Phase 2: Web-CALIB詳細ページ特有のパターンを優先
+  const webCalibPatterns = [
+    // Web-CALIBフォーム内の送信者フィールド
+    'input[name*="from"], input[name*="sender"], input[name*="sendUser"]',
+    // テーブル形式での送信者表示
+    'th:contains("送信者") + td, td:contains("送信者：") + td',
+    'th:contains("From") + td, td:contains("From：") + td', 
+    // 詳細表示エリア内の送信者情報
+    'table tr:has(th:contains("送信者")) td:nth-child(2)',
+    'table tr:has(td:contains("送信者")) td:nth-child(2)',
+    // Web-CALIBシステム特有のクラス・ID
+    '.sender-info, #senderInfo, .mail-from',
+    // フレーム内の送信者表示
+    'frameset frame[name*="detail"] table td:contains("@")',
   ];
   
-  for (const pattern of patterns) {
+  // Web-CALIB専用パターンでの検索
+  for (const pattern of webCalibPatterns) {
     const elements = $(pattern);
     for (let i = 0; i < elements.length; i++) {
       const element = $(elements[i]);
       let value = element.val()?.toString() || element.text()?.trim();
       
-      // メールアドレスパターンを検索
+      if (value) {
+        // Web-CALIBの実際の送信者パターンを検出
+        // 例: "リクルートエージェント <19703@r-agent.com>"
+        if (value.includes('@') && 
+            (value.includes('recruit') || value.includes('r-agent') || value.includes('リクルート'))) {
+          // システム表示ではない実際の送信者を優先
+          if (!value.includes('Web-CALIB System') && 
+              !value.includes('system@rt-calib') &&
+              !value.includes('送信者') && 
+              !value.includes('From') &&
+              value.length > 5) {
+            console.log(`🎯 Web-CALIB送信者検出: "${value}"`);
+            return value;
+          }
+        }
+      }
+    }
+  }
+  
+  // 追加検索: テキスト全体から送信者らしきパターンを抽出
+  const bodyText = $('body').text();
+  const senderPatterns = [
+    // "送信者：リクルートエージェント <email@domain>" パターン
+    /送信者[：:]\s*([^<>\n]+<[^<>\s]+@[^<>\s]+>)/g,
+    // "From: Name <email@domain>" パターン  
+    /From[：:]\s*([^<>\n]+<[^<>\s]+@[^<>\s]+>)/g,
+    // "リクルートエージェント <email@domain>" 単体パターン
+    /(リクルート[^<\n]*<[^<>\s]+@r-agent\.com>)/g,
+    // エージェント系のメールアドレスパターン
+    /([^<\n]*<[^<>\s]*@r-agent\.com>)/g,
+  ];
+  
+  for (const regex of senderPatterns) {
+    const matches = bodyText.match(regex);
+    if (matches && matches.length > 0) {
+      const match = matches[0].replace(/^(送信者|From)[：:]\s*/, '').trim();
+      if (match && match.length > 5) {
+        console.log(`🎯 パターンマッチ送信者検出: "${match}"`);
+        return match;
+      }
+    }
+  }
+  
+  // 最終フォールバック: 従来のパターン検索
+  const fallbackPatterns = [
+    'input[type="hidden"]',
+    'table td',
+    'div'
+  ];
+  
+  for (const pattern of fallbackPatterns) {
+    const elements = $(pattern);
+    for (let i = 0; i < elements.length; i++) {
+      const element = $(elements[i]);
+      let value = element.val()?.toString() || element.text()?.trim();
+      
+      // 従来のメールアドレスパターンを検索
       if (value && (value.includes('@') || value.includes('recruit') || value.includes('rt-calib'))) {
         // 不要な文字列を除去
         if (!value.includes('送信者') && !value.includes('From') && 
@@ -176,32 +232,97 @@ function extractFrom($: cheerio.CheerioAPI): string {
     }
   }
   
-  // フォールバック: デフォルト送信者を設定
+  // 最終フォールバック: デフォルト送信者を設定
   return 'Web-CALIB System <system@rt-calib.r-agent.com>';
 }
 
 /**
  * Web-CALIB: 宛先抽出
+ * Phase 2: Web-CALIB詳細ページ専用の抽出ロジック
  */
 function extractTo($: cheerio.CheerioAPI): string {
-  const patterns = [
-    'input[name="to"]',
-    'input[name="recipient"]',
-    'input[name="toEmail"]',
-    'td:contains("宛先") + td',
-    'td:contains("To") + td',
-    'th:contains("宛先") + td',
-    'th:contains("To") + td',
-    '.to',
-    '.recipient',
-    '#to'
+  // Phase 2: Web-CALIB特有のパターンを優先
+  const webCalibPatterns = [
+    // Web-CALIBフォーム内の宛先フィールド
+    'input[name*="to"], input[name*="recipient"], input[name*="mailTo"]',
+    // テーブル形式での宛先表示
+    'th:contains("宛先") + td, td:contains("宛先：") + td',
+    'th:contains("To") + td, td:contains("To：") + td',
+    'th:contains("受信者") + td, td:contains("受信者：") + td',
+    // 詳細表示エリア内の宛先情報
+    'table tr:has(th:contains("宛先")) td:nth-child(2)',
+    'table tr:has(td:contains("宛先")) td:nth-child(2)',
+    'table tr:has(th:contains("受信者")) td:nth-child(2)',
+    // Web-CALIBシステム特有のクラス・ID
+    '.recipient-info, #recipientInfo, .mail-to',
   ];
   
-  for (const pattern of patterns) {
-    const element = $(pattern).first();
-    let value = element.val()?.toString() || element.text()?.trim();
-    if (value && value.length > 0 && !value.includes('宛先') && !value.includes('To')) {
-      return value;
+  // Web-CALIB専用パターンでの検索
+  for (const pattern of webCalibPatterns) {
+    const elements = $(pattern);
+    for (let i = 0; i < elements.length; i++) {
+      const element = $(elements[i]);
+      let value = element.val()?.toString() || element.text()?.trim();
+      
+      if (value) {
+        // Web-CALIBの実際の受信者パターンを検出
+        // 例: "yuya_inagaki+005@r.recruit.co.jp"
+        if (value.includes('@') && 
+            (value.includes('recruit.co.jp') || value.includes('r.recruit.co.jp'))) {
+          // 不要な文字列を除去
+          if (!value.includes('宛先') && !value.includes('To') && !value.includes('受信者') &&
+              value.length > 5) {
+            console.log(`🎯 Web-CALIB受信者検出: "${value}"`);
+            return value;
+          }
+        }
+      }
+    }
+  }
+  
+  // 追加検索: テキスト全体から受信者らしきパターンを抽出
+  const bodyText = $('body').text();
+  const recipientPatterns = [
+    // "宛先：email@domain" パターン
+    /宛先[：:]\s*([^<\s\n]+@[^<\s\n]+)/g,
+    // "To: email@domain" パターン  
+    /To[：:]\s*([^<\s\n]+@[^<\s\n]+)/g,
+    // "受信者：email@domain" パターン
+    /受信者[：:]\s*([^<\s\n]+@[^<\s\n]+)/g,
+    // recruit.co.jp系のメールアドレスパターン
+    /([^<\s\n]+@r\.recruit\.co\.jp)/g,
+    /([^<\s\n]+@recruit\.co\.jp)/g,
+  ];
+  
+  for (const regex of recipientPatterns) {
+    const matches = bodyText.match(regex);
+    if (matches && matches.length > 0) {
+      const match = matches[0].replace(/^(宛先|To|受信者)[：:]\s*/, '').trim();
+      if (match && match.includes('@') && match.length > 5) {
+        console.log(`🎯 パターンマッチ受信者検出: "${match}"`);
+        return match;
+      }
+    }
+  }
+  
+  // 最終フォールバック: 従来のパターン検索
+  const fallbackPatterns = [
+    'input[type="hidden"]',
+    'table td',
+    'div'
+  ];
+  
+  for (const pattern of fallbackPatterns) {
+    const elements = $(pattern);
+    for (let i = 0; i < elements.length; i++) {
+      const element = $(elements[i]);
+      let value = element.val()?.toString() || element.text()?.trim();
+      
+      if (value && value.includes('@') && value.length > 5) {
+        if (!value.includes('宛先') && !value.includes('To') && !value.includes('受信者')) {
+          return value;
+        }
+      }
     }
   }
   
@@ -236,32 +357,116 @@ function extractCc($: cheerio.CheerioAPI): string {
 
 /**
  * Web-CALIB: 日付抽出
+ * Phase 2: Web-CALIB詳細ページ専用の抽出ロジック
  */
 function extractDate($: cheerio.CheerioAPI): string {
-  const patterns = [
-    'input[name="date"]',
-    'input[name="sendDate"]',
-    'input[name="mailDate"]',
-    'td:contains("日付") + td',
-    'td:contains("送信日") + td',
-    'td:contains("Date") + td',
-    'th:contains("日付") + td',
-    'th:contains("送信日") + td',
-    'th:contains("Date") + td',
-    '.date',
-    '.send-date',
-    '#date'
+  // Phase 2: Web-CALIB特有のパターンを優先
+  const webCalibPatterns = [
+    // Web-CALIBフォーム内の日付フィールド
+    'input[name*="date"], input[name*="sendDate"], input[name*="mailDate"]',
+    // テーブル形式での日付表示
+    'th:contains("日付") + td, td:contains("日付：") + td',
+    'th:contains("送信日") + td, td:contains("送信日：") + td',
+    'th:contains("Date") + td, td:contains("Date：") + td',
+    'th:contains("作成日時") + td, td:contains("作成日時：") + td',
+    'th:contains("処理日時") + td, td:contains("処理日時：") + td',
+    // 詳細表示エリア内の日付情報
+    'table tr:has(th:contains("日付")) td:nth-child(2)',
+    'table tr:has(td:contains("日付")) td:nth-child(2)',
+    'table tr:has(th:contains("送信日")) td:nth-child(2)',
+    // Web-CALIBシステム特有のクラス・ID
+    '.date-info, #dateInfo, .mail-date',
   ];
   
-  for (const pattern of patterns) {
-    const element = $(pattern).first();
-    let value = element.val()?.toString() || element.text()?.trim();
-    if (value && value.length > 0 && !value.includes('日付') && !value.includes('Date')) {
-      return value;
+  // Web-CALIB専用パターンでの検索
+  for (const pattern of webCalibPatterns) {
+    const elements = $(pattern);
+    for (let i = 0; i < elements.length; i++) {
+      const element = $(elements[i]);
+      let value = element.val()?.toString() || element.text()?.trim();
+      
+      if (value) {
+        // Web-CALIBの日付パターンを検出
+        // 例: "24/12/25 08:07:17" または "2024-12-25 08:07:17"
+        if (isValidDateFormat(value)) {
+          if (!value.includes('日付') && !value.includes('Date') && !value.includes('送信日')) {
+            console.log(`🎯 Web-CALIB日付検出: "${value}"`);
+            return value;
+          }
+        }
+      }
+    }
+  }
+  
+  // 追加検索: テキスト全体から日付らしきパターンを抽出
+  const bodyText = $('body').text();
+  const datePatterns = [
+    // "日付：24/12/25 08:07:17" パターン
+    /日付[：:]\s*(\d{2,4}[\/\-]\d{1,2}[\/\-]\d{1,2}\s+\d{1,2}:\d{2}:\d{2})/g,
+    // "送信日：24/12/25 08:07:17" パターン  
+    /送信日[：:]\s*(\d{2,4}[\/\-]\d{1,2}[\/\-]\d{1,2}\s+\d{1,2}:\d{2}:\d{2})/g,
+    // "作成日時：24/12/25 08:07:17" パターン
+    /作成日時[：:]\s*(\d{2,4}[\/\-]\d{1,2}[\/\-]\d{1,2}\s+\d{1,2}:\d{2}:\d{2})/g,
+    // 単独の日時パターン "24/12/25 08:07:17"
+    /(\d{2}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/g,
+    // ISO形式 "2024-12-25 08:07:17"
+    /(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/g,
+  ];
+  
+  for (const regex of datePatterns) {
+    const matches = bodyText.match(regex);
+    if (matches && matches.length > 0) {
+      const match = matches[0].replace(/^(日付|送信日|作成日時|Date)[：:]\s*/, '').trim();
+      if (match && isValidDateFormat(match)) {
+        console.log(`🎯 パターンマッチ日付検出: "${match}"`);
+        return match;
+      }
+    }
+  }
+  
+  // 最終フォールバック: 従来のパターン検索
+  const fallbackPatterns = [
+    'input[type="hidden"]',
+    'table td',
+    'div'
+  ];
+  
+  for (const pattern of fallbackPatterns) {
+    const elements = $(pattern);
+    for (let i = 0; i < elements.length; i++) {
+      const element = $(elements[i]);
+      let value = element.val()?.toString() || element.text()?.trim();
+      
+      if (value && isValidDateFormat(value)) {
+        if (!value.includes('日付') && !value.includes('Date') && !value.includes('送信日')) {
+          return value;
+        }
+      }
     }
   }
   
   return '';
+}
+
+/**
+ * 日付形式の妥当性チェック
+ */
+function isValidDateFormat(value: string): boolean {
+  if (!value || value.length < 8) return false;
+  
+  // Web-CALIB でよく使われる日付パターン
+  const datePatterns = [
+    /^\d{2}\/\d{2}\/\d{2}/, // 24/12/25
+    /^\d{4}\/\d{2}\/\d{2}/, // 2024/12/25
+    /^\d{2}-\d{2}-\d{2}/, // 24-12-25
+    /^\d{4}-\d{2}-\d{2}/, // 2024-12-25
+    /^\d{2}\/\d{2}\/\d{2}\s+\d{2}:\d{2}/, // 24/12/25 08:07
+    /^\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}/, // 2024/12/25 08:07
+    /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/, // 2024-12-25 08:07
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, // ISO format
+  ];
+  
+  return datePatterns.some(pattern => pattern.test(value.trim()));
 }
 
 /**

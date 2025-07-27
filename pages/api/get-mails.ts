@@ -177,6 +177,13 @@ export default async function handler(
     // メール取得実行
     const data = await fetchMailsFromCaSupport2(limit, offset, filters);
     
+    if (!data) {
+      return res.status(500).json({
+        success: false,
+        error: 'メールデータの取得に失敗しました'
+      });
+    }
+    
     console.log(`✅ ${data.mails.length}件のメールを取得完了`);
 
     res.status(200).json({

@@ -16,6 +16,7 @@ import type { ScraperConfig } from './types';
 function loadConfigFromEnv(): ScraperConfig {
   const config = {
     baseUrl: process.env.WEBCALIB_BASE_URL || 'https://rt-calib.r-agent.com',
+    // 実際のWeb-CALIBログインページURL（logoutページがログイン画面として機能）
     loginUrl: process.env.WEBCALIB_LOGIN_URL || '/webcalib/app/logout?sn=21f10a00b9a7d4f4836e5f6077a672af&CLB31A',
     listUrl: process.env.WEBCALIB_LIST_URL || '/webcalib/app/message_management33_list',
     username: process.env.WEBCALIB_USERNAME || '7777319',
@@ -27,6 +28,95 @@ function loadConfigFromEnv(): ScraperConfig {
   };
   
   return config;
+}
+
+/**
+ * Phase 3: ネットワーク接続テスト機能
+ */
+async function testNetworkConnection(baseUrl: string): Promise<boolean> {
+  console.log('🌐 ネットワーク接続テスト中...');
+  
+  try {
+    const testUrls = [
+      baseUrl,
+      `${baseUrl}/webcalib/app/logout?sn=21f10a00b9a7d4f4836e5f6077a672af&CLB31A`,
+      // DNS解決テスト用の代替URL
+      'https://google.com', // 基本的なインターネット接続確認
+    ];
+    
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko',
+      ignoreHTTPSErrors: true,
+    });
+    const page = await context.newPage();
+    
+    let connectionsSuccessful = 0;
+    let loginPageWorking = false;
+    let internetWorking = false;
+    
+    for (let i = 0; i < testUrls.length; i++) {
+      const url = testUrls[i];
+      try {
+        console.log(`🔗 接続テスト: ${url}`);
+        const response = await page.goto(url, { 
+          waitUntil: 'domcontentloaded', 
+          timeout: 10000 
+        });
+        
+        if (response && response.status() < 400) {
+          console.log(`  ✅ 成功 (HTTP ${response.status()})`);
+          connectionsSuccessful++;
+          
+          // ログインページ（index 1）の成功を記録
+          if (i === 1) {
+            loginPageWorking = true;
+          }
+          // インターネット接続確認（index 2 = Google）の成功を記録
+          if (i === 2) {
+            internetWorking = true;
+          }
+        } else {
+          console.log(`  ⚠️ 警告 (HTTP ${response?.status() || 'no response'})`);
+          // ベースURLの404は正常な場合があることを明記
+          if (i === 0 && response?.status() === 404) {
+            console.log(`  💡 ベースURLの404は正常です（Web-CALIBはルートページが存在しません）`);
+          }
+        }
+      } catch (error) {
+        console.log(`  ❌ 失敗: ${error instanceof Error ? error.message : String(error)}`);
+        
+        // DNS解決の問題かどうかを判定
+        if (error instanceof Error && error.message.includes('ERR_NAME_NOT_RESOLVED')) {
+          console.log(`  💡 DNS解決エラーの可能性: ${url}`);
+        }
+      }
+    }
+    
+    await browser.close();
+    
+    const successRate = (connectionsSuccessful / testUrls.length) * 100;
+    console.log(`📊 接続テスト完了: ${connectionsSuccessful}/${testUrls.length} 成功 (${successRate.toFixed(1)}%)`);
+    
+    // より詳細な診断結果を表示
+    if (loginPageWorking) {
+      console.log('✅ 重要: Web-CALIBログインページは正常に動作しています');
+    }
+    if (internetWorking) {
+      console.log('✅ インターネット接続は正常です');
+    }
+    if (!loginPageWorking) {
+      console.log('⚠️ Web-CALIBログインページに接続できませんでした');
+    }
+    
+    // 実際の業務に必要な接続（ログインページとインターネット）があれば継続
+    return loginPageWorking && internetWorking;
+    
+  } catch (error) {
+    console.error('❌ ネットワーク接続テストエラー:', error);
+    return false;
+  }
 }
 
 // ヘルプメッセージ
@@ -41,8 +131,8 @@ function showHelp() {
 
 必要な環境変数:
   WEBCALIB_BASE_URL     # Web-CALIBのベースURL (デフォルト: https://rt-calib.r-agent.com)
-  WEBCALIB_USERNAME     # ログインユーザー名 (必須)
-  WEBCALIB_PASSWORD     # ログインパスワード (必須)
+  WEBCALIB_USERNAME     # ログインユーザー名 (デフォルト: 7777319)
+  WEBCALIB_PASSWORD     # ログインパスワード (デフォルト: password1!)
   WEBCALIB_TARGET_EMAIL # 検索対象e-mail (デフォルト: yuya_inagaki+005@r.recruit.co.jp)
   
 オプション環境変数:
@@ -67,8 +157,8 @@ function showConfigExample() {
 
 # Web-CALIB 接続設定
 WEBCALIB_BASE_URL=https://rt-calib.r-agent.com
-WEBCALIB_USERNAME=your-username
-WEBCALIB_PASSWORD=your-password
+WEBCALIB_USERNAME=7777319
+WEBCALIB_PASSWORD=password1!
 
 # オプション設定
 WEBCALIB_TARGET_EMAIL=yuya_inagaki+005@r.recruit.co.jp
@@ -111,6 +201,27 @@ async function main() {
       validation.errors.forEach(error => console.error(`  - ${error}`));
       console.log('\n💡 --help オプションで使用方法を確認してください');
       process.exit(1);
+    }
+    
+    // Phase 3: ネットワーク接続テスト実行
+    console.log('🔍 Phase 3: ネットワーク診断開始...');
+    const networkOk = await testNetworkConnection(config.baseUrl);
+    
+    if (!networkOk) {
+      console.error('\n❌ ネットワーク接続に問題があります');
+      console.log('\n🔧 トラブルシューティング:');
+      console.log('  1. インターネット接続を確認してください');
+      console.log('  2. Web-CALIBサーバー (rt-calib.r-agent.com) にアクセス可能か確認してください');
+      console.log('  3. 企業ファイアウォールやプロキシ設定を確認してください');
+      console.log('  4. DNS設定を確認してください');
+      console.log('\n⚠️ 接続問題があっても処理を続行しますが、エラーが発生する可能性があります');
+      console.log('続行しますか？ (強制続行する場合は何かキーを押してください)');
+      
+      // 10秒待機後に続行
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      console.log('🔄 処理を続行します...\n');
+    } else {
+      console.log('✅ ネットワーク接続テスト完了\n');
     }
     
     if (validation.warnings.length > 0) {

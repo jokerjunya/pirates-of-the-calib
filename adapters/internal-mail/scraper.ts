@@ -51,22 +51,64 @@ export class WebCalibScraper {
     
     console.log('🔐 Web-CALIBにログイン中...');
     
-    try {
-      // ログインページURLを構築
-      let fullLoginUrl: string;
-      if (this.config.loginUrl.startsWith('http')) {
-        fullLoginUrl = this.config.loginUrl;
-      } else {
-        // baseURLの末尾のスラッシュとloginURLの先頭のスラッシュを正規化
-        const cleanBaseUrl = this.config.baseUrl.replace(/\/+$/, '');
-        const cleanLoginUrl = this.config.loginUrl.replace(/^\/+/, '');
-        fullLoginUrl = `${cleanBaseUrl}/${cleanLoginUrl}`;
+    // Phase 3: リトライ機能付きログイン
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 ログイン試行 ${attempt}/${maxRetries}...`);
+        
+        // ログインページURLを構築
+        let fullLoginUrl: string;
+        if (this.config.loginUrl.startsWith('http')) {
+          fullLoginUrl = this.config.loginUrl;
+        } else {
+          // baseURLの末尾のスラッシュとloginURLの先頭のスラッシュを正規化
+          const cleanBaseUrl = this.config.baseUrl.replace(/\/+$/, '');
+          const cleanLoginUrl = this.config.loginUrl.replace(/^\/+/, '');
+          fullLoginUrl = `${cleanBaseUrl}/${cleanLoginUrl}`;
+        }
+        
+        console.log(`🌐 ログインページアクセス中: ${fullLoginUrl}`);
+        
+        // Phase 3: より寛容なタイムアウト設定でログインページにアクセス  
+        await this.page.goto(fullLoginUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 15000 * attempt // 試行回数に応じてタイムアウトを延長
+        });
+        
+        // ログイン成功の場合、リトライループを抜ける
+        break;
+        
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.log(`❌ ログイン試行 ${attempt} 失敗:`, lastError.message);
+        
+        // ネットワーク系エラーの場合のハンドリング
+        if (lastError.message.includes('ERR_NAME_NOT_RESOLVED')) {
+          console.log('💡 DNS解決エラー - サーバーにアクセスできません');
+        } else if (lastError.message.includes('ERR_CONNECTION_REFUSED')) {
+          console.log('💡 接続拒否エラー - サーバーが応答していません');
+        } else if (lastError.message.includes('timeout')) {
+          console.log('💡 タイムアウトエラー - サーバーの応答が遅いです');
+        }
+        
+        // 最後の試行でなければ待機してリトライ
+        if (attempt < maxRetries) {
+          const waitTime = 2000 * attempt; // 2秒, 4秒, 6秒...
+          console.log(`⏳ ${waitTime}ms 待機後に再試行します...`);
+          await this.page.waitForTimeout(waitTime);
+        }
       }
-      
-      console.log(`🌐 ログインページアクセス中: ${fullLoginUrl}`);
-      
-      // ログインページにアクセス
-      await this.page.goto(fullLoginUrl);
+    }
+    
+    // 全試行失敗の場合はエラーを投げる
+    if (lastError) {
+      throw new Error(`ログイン失敗 (${maxRetries}回試行): ${lastError.message}`);
+    }
+    
+    try {
       
       // IE互換性のため複数の待機方法を試行
       try {
@@ -430,13 +472,24 @@ export class WebCalibScraper {
           // 新しいタブが開く可能性があるため、新しいページを監視
           console.log('🔍 新しいタブの開始を監視中...');
           
+          if (!this.page) {
+            throw new Error('Page not initialized');
+          }
+          if (!this.context) {
+            throw new Error('Browser context not initialized');
+          }
+          
           const beforeUrl = this.page.url();
           console.log(`🔍 クリック前URL: ${beforeUrl}`);
           
           // 新しいページ（タブ）が開くのを待機
-          const newPagePromise = this.context?.waitForEvent('page');
+          const newPagePromise = this.context.waitForEvent('page');
           await this.page.click(selector);
           const newPage = await newPagePromise;
+          
+          if (!newPage) {
+            throw new Error('新しいページが開かれませんでした');
+          }
           
           managementButtonFound = true;
           console.log(`✅ メッセージ管理ボタンクリック完了: ${selector}`);
@@ -577,7 +630,7 @@ export class WebCalibScraper {
           
           if (isValidMail) {
             // テーブル行の全セル（td要素）を取得
-            const cells = Array.from(row.querySelectorAll('td')).map(td => 
+            const cells = Array.from(row.querySelectorAll('td') as NodeListOf<HTMLTableCellElement>).map(td => 
               td.textContent?.trim() || ''
             );
             
@@ -634,7 +687,7 @@ export class WebCalibScraper {
       });
       
       console.log(`🎯 フレーム内で${mailList.length}件の一意なメールを発見:`);
-      mailList.forEach((mail, i) => {
+      mailList.forEach((mail: any, i: number) => {
         console.log(`   ${i + 1}. "${mail.subject}"`);
         console.log(`      送信者: "${mail.sender}", 受信者: "${mail.recipient}"`);
         console.log(`      日付: "${mail.date}", サイズ: "${mail.size}"`);
@@ -800,11 +853,11 @@ export class WebCalibScraper {
                    }
                  }
                } catch (frameMailError) {
-                 console.log(`⚠️ フレーム${i}のメール一覧探索エラー:`, frameMailError.message);
+                 console.log(`⚠️ フレーム${i}のメール一覧探索エラー:`, frameMailError instanceof Error ? frameMailError.message : String(frameMailError));
                }
              }
           } catch (frameError) {
-            console.log(`⚠️ フレーム${i}の調査エラー:`, frameError.message);
+            console.log(`⚠️ フレーム${i}の調査エラー:`, frameError instanceof Error ? frameError.message : String(frameError));
           }
         }
       } catch (error) {
@@ -844,7 +897,7 @@ export class WebCalibScraper {
               break;
             }
           } catch (directError) {
-            console.log(`⚠️ 直接アクセス失敗: ${mailUrl} - ${directError.message}`);
+            console.log(`⚠️ 直接アクセス失敗: ${mailUrl} - ${directError instanceof Error ? directError.message : String(directError)}`);
           }
         }
       } catch (error) {
@@ -938,7 +991,7 @@ export class WebCalibScraper {
             className: link.className
           })).filter(link => 
             link.href.includes('message_management') || 
-            link.text?.length > 0
+            (link.text && link.text.length > 0)
           ).slice(0, 10)
         );
         console.log('🔗 見つかったリンク:', JSON.stringify(allLinks, null, 2));

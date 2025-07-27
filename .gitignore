@@ -26,6 +26,12 @@ pids
 /data/
 data/
 
+# Debug files generated during scraping
+debug-*.png
+debug-*.html
+debug-*.json
+debug-*
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
