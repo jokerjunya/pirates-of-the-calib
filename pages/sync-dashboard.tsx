@@ -54,7 +54,7 @@ export default function SyncDashboard() {
       password: '', // セキュリティ上、パスワードは毎回入力
       targetEmail: process.env.NEXT_PUBLIC_WEBCALIB_TARGET_EMAIL || 'yuya_inagaki+005@r.recruit.co.jp',
       jobseekerNo: process.env.NEXT_PUBLIC_WEBCALIB_JOBSEEKER_NO || '',
-      headless: true
+      headless: false  // デバッグしやすくするためブラウザ表示をデフォルトに
     });
   }, []);
 
@@ -228,7 +228,7 @@ export default function SyncDashboard() {
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <label htmlFor="headless" className="ml-2 block text-sm text-gray-900">
-                    ヘッドレスモード (ブラウザを非表示)
+                    ヘッドレスモード (ブラウザを非表示) ※デバッグ時はOFFがおすすめ
                   </label>
                 </div>
               </div>

@@ -19,14 +19,21 @@ export class WebCalibScraper {
    * ブラウザを起動してログイン
    */
   async initialize(): Promise<void> {
-    console.log('🚀 Playwright ブラウザを起動中...');
+    console.log('🚀 Playwright ブラウザを起動中（Microsoft Edge互換モード）...');
     
     this.browser = await chromium.launch({
       headless: this.config.headless
     });
     
-    this.page = await this.browser.newPage();
+    // Microsoft EdgeのUser-Agentを設定
+    const context = await this.browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0'
+    });
+    
+    this.page = await context.newPage();
     this.page.setDefaultTimeout(this.config.timeout!);
+    
+    console.log('🌐 Microsoft Edge User-Agent設定完了');
     
     await this.login();
   }
@@ -55,13 +62,103 @@ export class WebCalibScraper {
       
       // ログインページにアクセス
       await this.page.goto(fullLoginUrl);
+      await this.page.waitForLoadState('networkidle');
       
-      // ログイン情報を入力
-      await this.page.fill('input[name="accountId"]', this.config.username);
-      await this.page.fill('input[name="password"]', this.config.password);
+      // デバッグ: ページの状態を確認
+      console.log('🔍 ページロード完了、DOM構造を確認中...');
+      
+      if (!this.config.headless) {
+        // ヘッドレスモードでない場合はスクリーンショットを保存
+        try {
+          await this.page.screenshot({ path: 'debug-login-page.png', fullPage: true });
+          console.log('📸 スクリーンショット保存: debug-login-page.png');
+        } catch (error) {
+          console.log('⚠️ スクリーンショット保存失敗:', error);
+        }
+      }
+      
+      // ログイン情報を入力（複数のセレクターを試行）
+      console.log('🔍 ユーザー名入力欄を探しています...');
+      const usernameSelectors = [
+        'input[name="accountId"]',
+        'input[name="username"]', 
+        'input[name="userId"]',
+        'input[name="loginId"]',
+        'input[type="text"]',
+        '#accountId',
+        '#username',
+        '#userId'
+      ];
+      
+      let usernameInputFound = false;
+      for (const selector of usernameSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 5000 });
+          await this.page.fill(selector, this.config.username);
+          console.log(`✅ ユーザー名入力完了: ${selector}`);
+          usernameInputFound = true;
+          break;
+        } catch {
+          continue;
+        }
+      }
+      
+      if (!usernameInputFound) {
+        throw new Error('ユーザー名入力欄が見つかりませんでした');
+      }
+      
+      console.log('🔍 パスワード入力欄を探しています...');
+      const passwordSelectors = [
+        'input[name="password"]',
+        'input[type="password"]',
+        '#password'
+      ];
+      
+      let passwordInputFound = false;
+      for (const selector of passwordSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 5000 });
+          await this.page.fill(selector, this.config.password);
+          console.log(`✅ パスワード入力完了: ${selector}`);
+          passwordInputFound = true;
+          break;
+        } catch {
+          continue;
+        }
+      }
+      
+      if (!passwordInputFound) {
+        throw new Error('パスワード入力欄が見つかりませんでした');
+      }
       
       // ログインボタンをクリック
-      await this.page.click('input[name="loginButton"]');
+      console.log('🔍 ログインボタンを探しています...');
+      const loginButtonSelectors = [
+        'input[name="loginButton"]',
+        'input[type="submit"]',
+        'button[type="submit"]',
+        'button:has-text("ログイン")',
+        'input[value="ログイン"]',
+        '#loginButton',
+        '.login-button'
+      ];
+      
+      let loginButtonFound = false;
+      for (const selector of loginButtonSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 5000 });
+          await this.page.click(selector);
+          console.log(`✅ ログインボタンクリック完了: ${selector}`);
+          loginButtonFound = true;
+          break;
+        } catch {
+          continue;
+        }
+      }
+      
+      if (!loginButtonFound) {
+        throw new Error('ログインボタンが見つかりませんでした');
+      }
       
       // ページ遷移を待機
       await this.page.waitForLoadState('networkidle');
