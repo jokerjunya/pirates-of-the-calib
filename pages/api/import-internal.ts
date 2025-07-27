@@ -45,6 +45,9 @@ interface ImportRequest {
   
   // オプション3: CLIから同期されたデータを受信
   mode?: 'direct' | 'scrape' | 'sync';
+  
+  // 🆕 デモサイトモード: localhost:3000のデモサイトから同期
+  demoMode?: boolean;
 }
 
 export default async function handler(
@@ -99,7 +102,25 @@ async function handleScrapeMode(
   res: NextApiResponse<ImportResponse>,
   body: ImportRequest
 ): Promise<void> {
-  const { scraperConfig } = body;
+  let { scraperConfig } = body;
+  const { demoMode = false } = body;
+
+  // 🆕 デモモード: localhost:3000のデモサイト用設定を自動適用
+  if (demoMode) {
+    console.log('🎯 デモサイトモード: localhost:3000用の設定を自動適用中...');
+    scraperConfig = {
+      baseUrl: 'http://localhost:3000',
+      loginUrl: '/webcalib/app/logout?sn=21f10a00b9a7d4f4836e5f6077a672af&CLB31A',
+      listUrl: '/webcalib/app/message_management33_list',
+      username: '7777319',
+      password: 'password1!',
+      targetEmail: 'demo@example.com',
+      jobseekerNo: 'J025870',
+      headless: false,  // デモサイトはブラウザ表示でデバッグしやすく
+      timeout: 30000   // デモサイトは高速なので短めに
+    };
+    console.log('✅ デモサイト用設定適用完了: localhost:3000');
+  }
 
   if (!scraperConfig) {
     return res.status(400).json({
@@ -119,7 +140,7 @@ async function handleScrapeMode(
     });
   }
 
-  console.log('🕷️  Starting Web-CALIB scraping...');
+  console.log(`🕷️  Starting Web-CALIB scraping... ${demoMode ? '(デモサイトモード)' : '(本番モード)'}`);
 
   // スクレイピング実行
   const syncResult = await syncWebCalibMails(scraperConfig);
@@ -137,7 +158,7 @@ async function handleScrapeMode(
 
   return res.status(200).json({
     success: true,
-    message: `Web-CALIB同期完了: ${syncResult.summary.totalScraped}件のメールを処理`,
+    message: `${demoMode ? 'デモサイト' : 'Web-CALIB'}同期完了: ${syncResult.summary.totalScraped}件のメールを処理`,
     data: {
       importedThreads: importResult.importedThreads,
       importedMessages: importResult.importedMessages,

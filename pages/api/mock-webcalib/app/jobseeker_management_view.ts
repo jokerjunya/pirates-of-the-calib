@@ -88,75 +88,53 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     <title>Web-CALIB 求職者検索結果</title>
     <style>
         body { font-family: MS PGothic, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; }
-        .container { background-color: white; padding: 20px; border: 1px solid #ccc; max-width: 600px; margin: 0 auto; }
-        .header { background-color: #0066cc; color: white; padding: 15px; text-align: center; margin-bottom: 20px; }
-        .result-info { padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; margin-bottom: 20px; }
-        .jobseeker-info { padding: 15px; background-color: #f8f9fa; border: 1px solid #dee2e6; margin-bottom: 20px; }
-        .action-buttons { text-align: center; margin-top: 20px; }
-        .message-button { padding: 12px 25px; background-color: #28a745; color: white; border: none; font-size: 14px; cursor: pointer; text-decoration: none; display: inline-block; margin: 0 10px; }
-        .message-button:hover { background-color: #218838; color: white; }
-        .back-button { padding: 12px 25px; background-color: #6c757d; color: white; border: none; font-size: 14px; cursor: pointer; text-decoration: none; display: inline-block; }
-        .back-button:hover { background-color: #5a6268; color: white; }
+        .result-container { background-color: white; padding: 20px; border: 1px solid #ccc; }
+        .result-header { border-bottom: 2px solid #0066cc; padding-bottom: 10px; margin-bottom: 20px; }
+        .jobseeker-info { margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; }
+        .message-button { 
+            background-color: #0066cc; 
+            color: white; 
+            padding: 10px 20px; 
+            text-decoration: none; 
+            border-radius: 4px; 
+            display: inline-block;
+            margin: 10px 5px;
+        }
+        .message-button:hover { background-color: #0052a3; }
+        .demo-notice { background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>求職者検索結果</h1>
-        </div>
-        
-        <div class="result-info">
-            <strong>✅ 検索完了:</strong> 該当する求職者が見つかりました
-        </div>
-        
-        <!-- 既存スクレイピングロジックが期待するjobseekerNo情報 -->
-        <div class="jobseeker-info">
-            <h3>📋 求職者情報</h3>
-            <p><strong>e-mailアドレス:</strong> ${email || 'yuya_inagaki+005@r.recruit.co.jp'}</p>
-            <p><strong>求職者番号:</strong> <span class="jobseeker-no">${demoJobseekerNo}</span></p>
-            <p><strong>氏名:</strong> 稲垣 雄也</p>
-            <p><strong>登録日:</strong> 2024-01-15</p>
-        </div>
-        
-        <!-- Hidden inputs（スクレイピングロジックが期待するDOM構造） -->
-        <input type="hidden" name="jobseekerNo" value="${demoJobseekerNo}">
-        <input type="hidden" name="email" value="${email || 'yuya_inagaki+005@r.recruit.co.jp'}">
-        
-        <!-- スクレイピングロジックが期待するメッセージ管理ボタン -->
-        <div class="action-buttons">
-            <a href="/webcalib/app/message_management33_list?jobseekerNo=${demoJobseekerNo}" 
-               class="message-button"
-               id="messageManagementButton">
-               📧 メッセージ管理
-            </a>
-            
-            <a href="/api/mock-webcalib/app/jobseeker_management_view" 
-               class="back-button">
-               ← 検索に戻る
-            </a>
-        </div>
-        
-        <!-- デバッグ情報 -->
-        <div style="margin-top: 30px; padding: 10px; background-color: #f8d7da; border: 1px solid #f5c6cb; font-size: 12px;">
-            <strong>🎯 スクレイピング用情報:</strong><br>
-            jobseekerNo: ${demoJobseekerNo}<br>
-            URL Parameter: jobseekerNo=${demoJobseekerNo}<br>
-            <em>※ 既存スクレイピングロジックがこの情報を自動取得します</em>
-        </div>
+    <div class="demo-notice">
+        <strong>📧 デモサイト検索結果:</strong> 
+        検索されたe-mail: <code>${email}</code> | 求職者番号: <code>${demoJobseekerNo}</code>
     </div>
     
-    <!-- URLパラメータとしてjobseekerNoを含める（JavaScript経由で更新） -->
-    <script>
-    // スクレイピングロジックが期待するURL構造を提供
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.set('jobseekerNo', '${demoJobseekerNo}');
-    window.history.replaceState({}, '', currentUrl.toString());
-    
-    // ページ内テキストにjobseekerNoを含める（スクレイピング検出用）
-    document.body.innerHTML += '<div style="display:none;">JobseekerNo: ${demoJobseekerNo}</div>';
-    </script>
+    <div class="result-container">
+        <div class="result-header">
+            <h2>🔍 求職者検索結果</h2>
+        </div>
+        
+        <div class="jobseeker-info">
+            <p><strong>求職者番号:</strong> ${demoJobseekerNo}</p>
+            <p><strong>検索対象e-mail:</strong> ${email}</p>
+            <p><strong>検索結果:</strong> 1件見つかりました</p>
+        </div>
+        
+        <div>
+            <a href="/webcalib/app/message_management33_list?jobseekerNo=${demoJobseekerNo}" 
+               class="message-button" 
+               id="messageManagementButton"
+               target="_blank">📧 メッセージ管理</a>
+        </div>
+        
+        <div style="margin-top: 20px; color: #666; font-size: 12px;">
+            <p>※ これはWeb-CALIBデモサイトです。実際の求職者データではありません。</p>
+        </div>
+    </div>
 </body>
-</html>`;
+</html>
+        `;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(searchResultHtml);

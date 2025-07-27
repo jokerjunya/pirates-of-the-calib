@@ -18,38 +18,35 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     {
       id: 'DEMO001',
       subject: '面談日時の件について',
+      href: '/webcalib/app/message_management33_view?messageId=DEMO001&messageNo=001&jobseekerNo=J025870',
       sender: 'リクルートエージェント',
       recipient: 'yuya_inagaki+005@r.recruit.co.jp',
-      date: '24/12/25 08:07',
       processDate: '24/12/25 08:07',
       createDate: '24/12/25 08:00',
       size: '2.1KB',
-      status: '未読',
-      href: '/api/mock-webcalib/app/message_management33_view?messageId=DEMO001&messageNo=001&jobseekerNo=J025870'
+      status: '未読'
     },
     {
-      id: 'DEMO002', 
+      id: 'DEMO002',
       subject: '選考結果のご連絡',
+      href: '/webcalib/app/message_management33_view?messageId=DEMO002&messageNo=002&jobseekerNo=J025870',
       sender: '株式会社サンプル採用担当',
       recipient: 'yuya_inagaki+005@r.recruit.co.jp',
-      date: '24/12/24 15:30',
       processDate: '24/12/24 15:30',
       createDate: '24/12/24 15:25',
       size: '1.8KB',
-      status: '既読',
-      href: '/api/mock-webcalib/app/message_management33_view?messageId=DEMO002&messageNo=002&jobseekerNo=J025870'
+      status: '既読'
     },
     {
       id: 'DEMO003',
       subject: '新着求人のご紹介 - エンジニア職',
+      href: '/webcalib/app/message_management33_view?messageId=DEMO003&messageNo=003&jobseekerNo=J025870',
       sender: 'リクルートエージェント',
-      recipient: 'yuya_inagaki+005@r.recruit.co.jp', 
-      date: '24/12/23 10:15',
+      recipient: 'yuya_inagaki+005@r.recruit.co.jp',
       processDate: '24/12/23 10:15',
       createDate: '24/12/23 10:10',
       size: '3.2KB',
-      status: '既読',
-      href: '/api/mock-webcalib/app/message_management33_view?messageId=DEMO003&messageNo=003&jobseekerNo=J025870'
+      status: '未読'
     }
   ];
 
@@ -84,14 +81,18 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             現在${demoMails.length}件のデモメールを表示中です。既存スクレイピングロジックとの互換性確認用です。
         </div>
         
-        <!-- 既存スクレイピングロジックが期待するテーブル構造 -->
+        <!-- スクレイピングロジック対応：本番サイト構造に合わせたテーブル -->
         <table class="list2">
             <thead>
                 <tr>
-                    <th>番号</th>
+                    <th></th>
+                    <th>コミュ</th>
+                    <th>未読</th>
                     <th>件名</th>
                     <th>送信者</th>
                     <th>受信者</th>
+                    <th>日付</th>
+                    <th>メモ</th>
                     <th>処理日時</th>
                     <th>作成日時</th>
                     <th>サイズ</th>
@@ -101,10 +102,14 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             <tbody>
                 ${demoMails.map((mail, index) => `
                 <tr>
-                    <td>${index + 1}</td>
+                    <td><input type="checkbox" /></td>
+                    <td>-</td>
+                    <td>${mail.status === '未読' ? '●' : ''}</td>
                     <td><a href="${mail.href}">${mail.subject}</a></td>
                     <td>${mail.sender}</td>
                     <td>${mail.recipient}</td>
+                    <td>${mail.processDate}</td>
+                    <td>-</td>
                     <td>${mail.processDate}</td>
                     <td>${mail.createDate}</td>
                     <td>${mail.size}</td>

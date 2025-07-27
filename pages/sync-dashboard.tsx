@@ -135,8 +135,8 @@ export default function SyncDashboard() {
     fetchMails();
   }, []);
 
-  // 同期実行
-  const handleSync = async () => {
+  // 🆕 本番サイト同期実行
+  const handleProdSync = async () => {
     if (!config.baseUrl || !config.username || !config.password || !config.targetEmail) {
       alert('必要な設定項目（Base URL、ユーザー名、パスワード、検索対象e-mail）を入力してください');
       return;
@@ -146,14 +146,14 @@ export default function SyncDashboard() {
       ...prev,
       isRunning: true,
       progress: 0,
-      currentStep: '同期を開始しています...',
+      currentStep: '本番サイト同期を開始しています...',
       errors: []
     }));
 
     setSyncResult(null);
 
     try {
-      // 同期リクエストを送信
+      // 本番同期リクエストを送信
       const response = await fetch('/api/import-internal', {
         method: 'POST',
         headers: {
@@ -161,6 +161,7 @@ export default function SyncDashboard() {
         },
         body: JSON.stringify({
           mode: 'scrape',
+          demoMode: false,  // 本番モード
           scraperConfig: {
             baseUrl: config.baseUrl,
             loginUrl: '/webcalib/app/logout?sn=21f10a00b9a7d4f4836e5f6077a672af&CLB31A',
@@ -183,28 +184,89 @@ export default function SyncDashboard() {
           ...prev,
           isRunning: false,
           progress: 100,
-          currentStep: '同期完了',
+          currentStep: '本番同期完了',
           lastSyncAt: new Date().toLocaleString('ja-JP')
         }));
 
-        // 🔥 同期成功時に自動でメール一覧を更新 (Dash AI方式)
-        console.log('🔄 同期完了 - メール一覧を自動更新中...');
+        // 同期成功時に自動でメール一覧を更新
+        console.log('🔄 本番同期完了 - メール一覧を自動更新中...');
         await fetchMails();
       } else {
         setSyncStatus(prev => ({
           ...prev,
           isRunning: false,
-          currentStep: 'エラーが発生しました',
+          currentStep: '本番同期でエラーが発生しました',
           errors: [result.error || '不明なエラー']
         }));
       }
 
     } catch (error) {
-      console.error('Sync error:', error);
+      console.error('Production sync error:', error);
       setSyncStatus(prev => ({
         ...prev,
         isRunning: false,
-        currentStep: 'エラーが発生しました',
+        currentStep: '本番同期でエラーが発生しました',
+        errors: [`通信エラー: ${error}`]
+      }));
+    }
+  };
+
+  // 🆕 デモサイト同期実行
+  const handleDemoSync = async () => {
+    setSyncStatus(prev => ({
+      ...prev,
+      isRunning: true,
+      progress: 0,
+      currentStep: 'デモサイト同期を開始しています...',
+      errors: []
+    }));
+
+    setSyncResult(null);
+
+    try {
+      // デモサイト同期リクエストを送信（設定は全て自動）
+      const response = await fetch('/api/import-internal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          mode: 'scrape',
+          demoMode: true,  // デモモード（設定は自動適用）
+          scraperConfig: {}  // デモモードでは空でOK
+        })
+      });
+
+      const result: SyncResult = await response.json();
+      setSyncResult(result);
+
+      if (result.success) {
+        setSyncStatus(prev => ({
+          ...prev,
+          isRunning: false,
+          progress: 100,
+          currentStep: 'デモサイト同期完了',
+          lastSyncAt: new Date().toLocaleString('ja-JP')
+        }));
+
+        // 同期成功時に自動でメール一覧を更新
+        console.log('🔄 デモサイト同期完了 - メール一覧を自動更新中...');
+        await fetchMails();
+      } else {
+        setSyncStatus(prev => ({
+          ...prev,
+          isRunning: false,
+          currentStep: 'デモサイト同期でエラーが発生しました',
+          errors: [result.error || '不明なエラー']
+        }));
+      }
+
+    } catch (error) {
+      console.error('Demo sync error:', error);
+      setSyncStatus(prev => ({
+        ...prev,
+        isRunning: false,
+        currentStep: 'デモサイト同期でエラーが発生しました',
         errors: [`通信エラー: ${error}`]
       }));
     }
@@ -363,28 +425,72 @@ export default function SyncDashboard() {
             </div>
           </div>
 
-          {/* 同期ボタン */}
+          {/* 同期ボタン - 本番 & デモサイト */}
           <div className="bg-white shadow rounded-lg p-6 mt-6">
-            <button
-              onClick={handleSync}
-              disabled={syncStatus.isRunning}
-              className={`w-full py-3 px-4 rounded-md font-medium text-white transition-colors ${
-                syncStatus.isRunning
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500'
-              }`}
-            >
-              {syncStatus.isRunning ? (
-                <>
-                  <span className="inline-block animate-spin mr-2">⏳</span>
-                  同期実行中...
-                </>
-              ) : (
-                <>
-                  🚀 Web-CALIB同期を開始
-                </>
-              )}
-            </button>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">🚀 同期実行</h2>
+              <p className="text-sm text-gray-600">
+                本番サイトまたはデモサイトからメールをスクレイピングして取り込みます
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 本番サイト同期ボタン */}
+              <button
+                onClick={handleProdSync}
+                disabled={syncStatus.isRunning}
+                className={`py-3 px-4 rounded-md font-medium text-white transition-colors ${
+                  syncStatus.isRunning
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                }`}
+              >
+                {syncStatus.isRunning ? (
+                  <>
+                    <span className="inline-block animate-spin mr-2">⏳</span>
+                    実行中...
+                  </>
+                ) : (
+                  <>
+                    🏢 本番サイト同期
+                  </>
+                )}
+              </button>
+
+              {/* デモサイト同期ボタン */}
+              <button
+                onClick={handleDemoSync}
+                disabled={syncStatus.isRunning}
+                className={`py-3 px-4 rounded-md font-medium text-white transition-colors ${
+                  syncStatus.isRunning
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500'
+                }`}
+              >
+                {syncStatus.isRunning ? (
+                  <>
+                    <span className="inline-block animate-spin mr-2">⏳</span>
+                    実行中...
+                  </>
+                ) : (
+                  <>
+                    🎯 デモサイト同期
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* 説明テキスト */}
+            <div className="mt-4 text-xs text-gray-500 space-y-1">
+              <div className="flex items-center">
+                <span className="w-3 h-3 bg-blue-600 rounded mr-2"></span>
+                <span>本番サイト: 上記設定を使用してWeb-CALIBからスクレイピング</span>
+              </div>
+              <div className="flex items-center">
+                <span className="w-3 h-3 bg-green-600 rounded mr-2"></span>
+                <span>デモサイト: localhost:3000のデモサイトから自動設定でスクレイピング</span>
+              </div>
+            </div>
           </div>
 
           {/* メール一覧セクション (Gmail風 + Event Genie方式) */}
@@ -634,15 +740,40 @@ export default function SyncDashboard() {
           )}
 
           {/* ヘルプセクション */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-6">
-            <h3 className="text-md font-semibold text-blue-900 mb-2">💡 使用ガイド</h3>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Base URL: <code className="bg-blue-100 px-1 rounded">https://rt-calib.r-agent.com</code></li>
-              <li>• 検索対象e-mail: スクレイピング対象のユーザーのe-mailアドレス</li>
-              <li>• 「同期開始」ボタンで自動的に検索→メッセージ管理→メール取得を実行</li>
-              <li>• 取得したメールは自動的に ca-support2 システムに取り込まれます</li>
-              <li>• CLI コマンド: <code className="bg-blue-100 px-1 rounded">pnpm sync:internal</code></li>
-            </ul>
+          <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg p-6 mt-6">
+            <h3 className="text-md font-semibold text-gray-900 mb-3">💡 使用ガイド</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* 本番サイト同期 */}
+              <div>
+                <h4 className="font-semibold text-blue-900 mb-2">🏢 本番サイト同期</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• 上記設定フォームの入力が必要</li>
+                  <li>• Base URL: <code className="bg-blue-100 px-1 rounded">https://rt-calib.r-agent.com</code></li>
+                  <li>• 検索対象e-mail: 実際のユーザーアドレス</li>
+                  <li>• 本番のメールデータを取得</li>
+                  <li>• CLI: <code className="bg-blue-100 px-1 rounded">pnpm sync:internal</code></li>
+                </ul>
+              </div>
+
+              {/* デモサイト同期 */}
+              <div>
+                <h4 className="font-semibold text-green-900 mb-2">🎯 デモサイト同期</h4>
+                <ul className="text-sm text-green-800 space-y-1">
+                  <li>• 設定入力は不要（自動適用）</li>
+                  <li>• Base URL: <code className="bg-green-100 px-1 rounded">http://localhost:3000</code></li>
+                  <li>• 認証: <code className="bg-green-100 px-1 rounded">7777319 / password1!</code></li>
+                  <li>• デモの3件のメールデータを取得</li>
+                  <li>• テスト・開発用途に最適</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                💡 <strong>おすすめの使い方:</strong> まずデモサイト同期でシステムをテストしてから、本番サイト同期で実データを取得してください
+              </p>
+            </div>
           </div>
         </div>
       </div>
