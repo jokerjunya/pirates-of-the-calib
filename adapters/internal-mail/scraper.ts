@@ -362,6 +362,29 @@ export class WebCalibScraper {
       console.log('📍 メッセージ管理後のURL:', this.page.url());
       console.log('📄 メッセージ管理後のページタイトル:', await this.page.title());
       
+      // 実際にメッセージ管理ページに到達しているかチェック
+      try {
+        const hasMessageContent = await this.page.evaluate(() => {
+          const bodyText = document.body.textContent || '';
+          const hasCS = bodyText.includes('CS通達');
+          const hasMessage = bodyText.includes('メッセージ');
+          const hasMail = bodyText.includes('面接');
+          return { hasCS, hasMessage, hasMail, bodyPreview: bodyText.substring(0, 200) };
+        });
+        
+        console.log('📄 ページ内容確認:');
+        console.log(`   - CS通達含む: ${hasMessageContent.hasCS}`);
+        console.log(`   - メッセージ含む: ${hasMessageContent.hasMessage}`);
+        console.log(`   - 面接含む: ${hasMessageContent.hasMail}`);
+        console.log(`   - 内容プレビュー: "${hasMessageContent.bodyPreview}..."`);
+        
+        if (!hasMessageContent.hasCS && !hasMessageContent.hasMail) {
+          console.log('⚠️ メール内容が見つからない - 別のページに到達している可能性');
+        }
+      } catch (error) {
+        console.log('⚠️ ページ内容確認エラー:', error);
+      }
+      
     } catch (error) {
       console.error('❌ メッセージ管理ページへの遷移エラー:', error);
       throw error;
@@ -469,69 +492,69 @@ export class WebCalibScraper {
       const mailList = await this.page.evaluate(() => {
         console.log('🔍 JavaScript側でメール一覧を検索中...');
         
-        // パターン1: table.list2（画像で確認された実際の構造）
-        let table = document.querySelector('table.list2');
-        console.log('📊 table.list2の結果:', table ? 'あり' : 'なし');
+        // まず、現在のページ内の全てのテーブルを詳しく調査
+        const allTables = document.querySelectorAll('table');
+        console.log(`📊 ページ内の全テーブル数: ${allTables.length}`);
         
-        if (table) {
-          console.log('📊 table.list2の詳細情報:');
-          console.log('   - 行数:', table.querySelectorAll('tr').length);
-          console.log('   - セル数例:', table.querySelector('tr')?.querySelectorAll('td, th').length);
-        }
+        // 各テーブルを詳しく調査してメール一覧テーブルを特定
+        let table = null;
+        let tableFound = false;
         
-        // パターン2: 他のテーブルクラス
-        if (!table) {
-          const tableSelectors = ['table.list', 'table', '.list2', '.list'];
-          for (const selector of tableSelectors) {
-            table = document.querySelector(selector);
-            if (table) {
-              console.log(`📊 ${selector}で見つかりました`);
-              break;
-            }
+        for (let i = 0; i < allTables.length; i++) {
+          const currentTable = allTables[i];
+          const rows = currentTable.querySelectorAll('tr');
+          const firstRowText = rows[0]?.textContent?.trim() || '';
+          const hasMailLinks = currentTable.querySelectorAll('a[href*="CS通達"], a[href*="message"], a[href*="メール"]').length > 0;
+          
+          console.log(`📊 テーブル${i}: ${currentTable.className || '(クラス名なし)'}`);
+          console.log(`    - 行数: ${rows.length}`);
+          console.log(`    - 最初の行: "${firstRowText.substring(0, 50)}..."`);
+          console.log(`    - メール系リンク数: ${hasMailLinks}`);
+          
+          // メール一覧テーブルの特徴：
+          // 1. 複数の行がある
+          // 2. CS通達、面接、メールなどのキーワードを含むリンクがある
+          // 3. 求職者管理テーブルではない
+          if (rows.length > 5 && hasMailLinks && !firstRowText.includes('イナガキ') && !firstRowText.includes('稲垣')) {
+            console.log(`🎯 メール一覧テーブル発見: テーブル${i}`);
+            table = currentTable;
+            tableFound = true;
+            break;
           }
         }
         
-        // パターン3: div要素によるリスト
-        if (!table) {
-          console.log('📊 テーブルが見つからないため、div要素を探します');
-          const divContainers = document.querySelectorAll('div');
-          for (const div of divContainers) {
-            const links = div.querySelectorAll('a[href*="message_management33_view"]');
-            if (links.length > 0) {
-              console.log('📊 div内にメールリンクを発見');
-              const results = Array.from(links).map(link => ({
-                subject: link.textContent?.trim() || 'タイトル不明',
-                href: link.getAttribute('href') || '',
-                date: link.closest('tr')?.querySelector('td')?.textContent?.trim() || 
-                      link.parentElement?.textContent?.match(/\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}/)?.[0] || '日付不明'
-              }));
-              return results;
-            }
+        if (!tableFound) {
+          console.log('⚠️ 明確なメール一覧テーブルが見つからないため、全テーブルからメール系リンクを探索');
+          
+          // すべてのテーブルからメール系リンクを収集
+          const allMailLinks = [];
+          allTables.forEach((tbl, index) => {
+            const mailLinks = tbl.querySelectorAll('a');
+            mailLinks.forEach(link => {
+              const href = link.getAttribute('href') || '';
+              const text = link.textContent?.trim() || '';
+              if ((href.includes('CS通達') || href.includes('message') || href.includes('面接') || 
+                   text.includes('CS通達') || text.includes('面接') || text.includes('決算')) &&
+                  !text.includes('稲垣') && !text.includes('イナガキ')) {
+                console.log(`🔗 メール系リンク発見 (テーブル${index}): "${text}" → ${href}`);
+                allMailLinks.push({
+                  subject: text,
+                  href: href,
+                  date: link.closest('tr')?.querySelector('td')?.textContent?.trim() || '不明'
+                });
+              }
+            });
+          });
+          
+          if (allMailLinks.length > 0) {
+            console.log(`📧 全テーブル探索で${allMailLinks.length}件のメールリンクを発見`);
+            return allMailLinks;
           }
         }
         
-        if (!table) {
-          console.log('❌ テーブルまたはメールリストが見つかりませんでした');
-          
-          // 最後の手段：全てのリンクからメール関連を探す
-          const allLinks = document.querySelectorAll('a');
-          const mailLinks = Array.from(allLinks).filter(link => 
-            link.href.includes('message_management33_view') || 
-            link.href.includes('message_management') ||
-            link.textContent?.includes('件名') ||
-            link.textContent?.includes('メール')
-          );
-          
-          console.log(`🔗 全リンクから${mailLinks.length}件のメール関連リンクを発見`);
-          
-          if (mailLinks.length > 0) {
-            return mailLinks.map(link => ({
-              subject: link.textContent?.trim() || 'リンクタイトル不明',
-              href: link.getAttribute('href') || '',
-              date: 'リンクから日付取得不可'
-            }));
-          }
-          
+        // メール一覧テーブルが特定できなかった場合の処理
+        if (!tableFound) {
+          console.log('❌ メール一覧テーブルが特定できませんでした');
           return [];
         }
         
