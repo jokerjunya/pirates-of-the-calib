@@ -9,6 +9,10 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  // jobseekerNoパラメータを取得（e-mail検索から渡される）
+  const { jobseekerNo } = req.query;
+  console.log(`📧 メール一覧要求: jobseekerNo=${jobseekerNo}`);
+
   // デモメールデータ（少数から開始）
   const demoMails = [
     {
@@ -21,7 +25,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       createDate: '24/12/25 08:00',
       size: '2.1KB',
       status: '未読',
-      href: '/api/mock-webcalib/message-detail?messageId=DEMO001'
+      href: '/api/mock-webcalib/app/message_management33_view?messageId=DEMO001&messageNo=001&jobseekerNo=J025870'
     },
     {
       id: 'DEMO002', 
@@ -33,7 +37,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       createDate: '24/12/24 15:25',
       size: '1.8KB',
       status: '既読',
-      href: '/api/mock-webcalib/message-detail?messageId=DEMO002'
+      href: '/api/mock-webcalib/app/message_management33_view?messageId=DEMO002&messageNo=002&jobseekerNo=J025870'
     },
     {
       id: 'DEMO003',
@@ -45,7 +49,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       createDate: '24/12/23 10:10',
       size: '3.2KB',
       status: '既読',
-      href: '/api/mock-webcalib/message-detail?messageId=DEMO003'
+      href: '/api/mock-webcalib/app/message_management33_view?messageId=DEMO003&messageNo=003&jobseekerNo=J025870'
     }
   ];
 
@@ -98,7 +102,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
                 ${demoMails.map((mail, index) => `
                 <tr>
                     <td>${index + 1}</td>
-                    <td><a href="${mail.href}" target="_blank">${mail.subject}</a></td>
+                    <td><a href="${mail.href}">${mail.subject}</a></td>
                     <td>${mail.sender}</td>
                     <td>${mail.recipient}</td>
                     <td>${mail.processDate}</td>
