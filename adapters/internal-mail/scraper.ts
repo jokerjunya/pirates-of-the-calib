@@ -597,7 +597,14 @@ export class WebCalibScraper {
         const frameTitle = await targetFrame.title();
         console.log(`📍 使用フレーム: "${frameTitle}" - ${frameUrl}`);
         
-        return await this.extractMailListFromFrame(targetFrame);
+        const frameMailList = await this.extractMailListFromFrame(targetFrame);
+        
+        if (frameMailList.length > 0) {
+          console.log(`🎉 フレーム内で${frameMailList.length}件のメールを正常取得！処理を完了します`);
+          return frameMailList; // 成功時は即座に返す
+        } else {
+          console.log('⚠️ フレーム内でメールが見つかりませんでした - メインページにフォールバック');
+        }
       } catch (error) {
         console.log('⚠️ targetFrame使用エラー:', error);
         console.log('💡 メインページでの取得にフォールバック');
@@ -840,15 +847,35 @@ export class WebCalibScraper {
         console.log('⚠️ div解析エラー:', error);
       }
       
-      // 🚨 一時的にメール取得を無効化 - 完全ページ解析モード
-      console.log('🚨 メール取得ロジックを一時無効化 - 完全ページ解析を優先');
-      console.log('📋 現在は以下のファイルで実際のメール位置を特定してください:');
-      console.log('   1. debug-maillist-page.png (スクリーンショット)');
-      console.log('   2. debug-maillist-full.html (完全HTML)');
-      console.log('   3. 上記のキーワード周辺HTML情報');
+      // メール一覧を実際に取得する処理（メインページ用のフォールバック）
+      console.log('📋 メインページでのメール一覧取得を試行...');
       
-      // 空の配列を返して、完全ページ解析に集中
-      const mailList: Array<{subject: string, href: string, date: string}> = [];
+      const mailList = await this.page.evaluate(() => {
+        const mails: Array<{subject: string, href: string, date: string}> = [];
+        
+        // table.list2やその他のメール一覧テーブルを検索
+        const tableRows = document.querySelectorAll('table.list2 tr, table tr');
+        console.log(`🔍 ${tableRows.length}個のテーブル行を発見`);
+        
+        for (const row of tableRows) {
+          const link = row.querySelector('a[href*="message_management33_view"]');
+          if (link && link.textContent) {
+            const subject = link.textContent.trim();
+            const href = (link as HTMLAnchorElement).href;
+            
+            // メール関連キーワードをチェック
+            if (subject.includes('CS通達') || subject.includes('面接') || subject.includes('メール') || subject.length > 5) {
+              mails.push({
+                subject: subject.substring(0, 100),
+                href: href,
+                date: new Date().toISOString().split('T')[0]
+              });
+            }
+          }
+        }
+        
+        return mails;
+      });
       
       console.log(`📧 ${mailList.length}件のメールを発見`);
       
