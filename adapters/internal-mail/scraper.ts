@@ -521,6 +521,49 @@ export class WebCalibScraper {
   }
 
   /**
+   * フレーム内からメール一覧を抽出
+   */
+  async extractMailListFromFrame(frame: any): Promise<Array<{subject: string, href: string, date: string}>> {
+    console.log('🔍 フレーム内メール一覧を抽出中...');
+    
+    try {
+      const mailList = await frame.$$eval('table tr, .list2 tr, div[class*="mail"], a[href*="message"]', (elements: any[]) =>
+        elements.map(el => {
+          const text = el.textContent?.trim() || '';
+          const href = el.href || (el.querySelector('a') as HTMLAnchorElement)?.href || '';
+          
+          // メール関連のキーワードを含むかチェック
+          const isMailRelated = 
+            text.includes('CS通達') || 
+            text.includes('面接') || 
+            text.includes('メール') ||
+            href.includes('message_management33_view') ||
+            href.includes('message');
+          
+          if (isMailRelated && text.length > 5 && href.length > 10) {
+            return {
+              subject: text.substring(0, 100),
+              href: href,
+              date: new Date().toISOString().split('T')[0] // 暫定的な日付
+            };
+          }
+          return null;
+        }).filter(item => item !== null)
+      );
+      
+      console.log(`🎯 フレーム内で${mailList.length}件のメールを発見:`);
+      mailList.forEach((mail, i) => {
+        console.log(`   ${i + 1}. "${mail.subject}" - ${mail.href}`);
+      });
+      
+      return mailList;
+    } catch (error) {
+      console.log('⚠️ フレーム内メール抽出エラー:', error);
+      return [];
+    }
+  }
+
+  /**
    * メール一覧を取得
    */
   async fetchMailList(): Promise<Array<{subject: string, href: string, date: string}>> {
@@ -528,9 +571,25 @@ export class WebCalibScraper {
     
     console.log('📬 メール一覧を取得中...');
     
+    // targetFrameが設定されている場合、そのフレームを使用
+    const targetFrame = (this as any).targetFrame;
+    if (targetFrame) {
+      console.log('🎯 発見されたtargetFrameを使用してメール一覧を取得中...');
+      try {
+        const frameUrl = targetFrame.url();
+        const frameTitle = await targetFrame.title();
+        console.log(`📍 使用フレーム: "${frameTitle}" - ${frameUrl}`);
+        
+        return await this.extractMailListFromFrame(targetFrame);
+      } catch (error) {
+        console.log('⚠️ targetFrame使用エラー:', error);
+        console.log('💡 メインページでの取得にフォールバック');
+      }
+    }
+    
     try {
       // navigateToMessageManagement()の後、既にメール一覧ページにいるはず
-      console.log('📍 現在のページでメール一覧を取得中...');
+      console.log('📍 メインページでメール一覧を取得中...');
       console.log('🌐 現在のURL:', this.page.url());
       
       // ページが完全に読み込まれるまで少し待機
