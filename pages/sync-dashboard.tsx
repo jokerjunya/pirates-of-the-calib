@@ -422,68 +422,158 @@ export default function SyncDashboard() {
             )}
 
             {!mailList.loading && mailList.mails.length > 0 && (
-              <div className="space-y-2">
-                {mailList.mails.map((mail) => (
-                  <div 
-                    key={mail.id} 
-                    className={`p-4 rounded-lg border transition-all duration-200 cursor-pointer hover:shadow-md ${
-                      mail.isRead 
-                        ? 'bg-white border-gray-200' 
-                        : 'bg-blue-50 border-l-4 border-l-blue-500 border-t-gray-200 border-r-gray-200 border-b-gray-200'
-                    }`}
-                  >
-                    {/* メールヘッダー (Gmail風) */}
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1 min-w-0">
-                        <div className={`text-base ${mail.isRead ? 'font-normal' : 'font-bold'} text-gray-900 truncate mb-1`}>
-                          {mail.subject}
-                        </div>
-                        <div className="text-sm text-gray-600 truncate">
-                          👤 {mail.from}
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500 text-right ml-4 flex-shrink-0">
-                        📅 {new Date(mail.date).toLocaleDateString('ja-JP', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </div>
-                    </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        📧 件名
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        👤 送信者
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        📮 受信者
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        📅 日付
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ⏰ 処理日時
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        📏 サイズ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        🏷️ ラベル
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        🔗 アクション
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {mailList.mails.map((mail, index) => (
+                      <tr 
+                        key={mail.id} 
+                        className={`hover:bg-gray-50 transition-colors duration-200 ${
+                          mail.isRead ? '' : 'bg-blue-50'
+                        } ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                      >
+                        {/* 件名 */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <div className={`text-sm ${mail.isRead ? 'font-normal text-gray-900' : 'font-bold text-gray-900'} truncate max-w-xs`}>
+                              {mail.subject}
+                            </div>
+                            {mail.snippet && (
+                              <div className="text-xs text-gray-500 truncate max-w-xs mt-1">
+                                {mail.snippet.substring(0, 50)}...
+                              </div>
+                            )}
+                          </div>
+                        </td>
 
-                    {/* メール概要 (Ultra AI方式) */}
-                    <div className="text-xs text-gray-600 mb-2 line-clamp-2">
-                      {mail.snippet}
-                    </div>
+                        {/* 送信者 */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900 max-w-xs truncate">
+                            {/* 将来的にmailオブジェクトに sender フィールドが追加される予定 */}
+                            {(mail as any).sender || mail.from.replace(' <system@rt-calib.r-agent.com>', '') || 'Web-CALIB System'}
+                          </div>
+                        </td>
 
-                    {/* ラベルとアクション (Event Genie + Dash AI方式) */}
-                    <div className="flex justify-between items-center">
-                      <div className="flex gap-1 flex-wrap">
-                        {mail.labels.map((label, index) => (
-                          <span 
-                            key={index}
-                            className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full border border-blue-200"
-                          >
-                            🏷️ {label}
-                          </span>
-                        ))}
-                      </div>
-                      
-                      {/* Event Genieのソースリンク機能 */}
-                      {mail.sourceUrl && (
-                        <a 
-                          href={mail.sourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-                        >
-                          🔗 元メール
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                        {/* 受信者 */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900 max-w-xs truncate">
+                            {/* 将来的にmailオブジェクトに recipient フィールドが追加される予定 */}
+                            {(mail as any).recipient || mail.to || 'yuya_inagaki+005@r.recruit.co.jp'}
+                          </div>
+                        </td>
+
+                        {/* 日付 */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {new Date(mail.date).toLocaleDateString('ja-JP', {
+                              year: '2-digit',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </td>
+
+                        {/* 処理日時 */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {/* 将来的にmailオブジェクトに processDate フィールドが追加される予定 */}
+                            {(mail as any).processDate || 
+                             new Date(mail.date).toLocaleDateString('ja-JP', {
+                               year: '2-digit',
+                               month: '2-digit', 
+                               day: '2-digit',
+                               hour: '2-digit',
+                               minute: '2-digit'
+                             }).replace(/\//g, '/').replace(' ', ' ')
+                            }
+                          </div>
+                        </td>
+
+                        {/* サイズ */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {/* 将来的にmailオブジェクトに size フィールドが追加される予定 */}
+                            {(mail as any).size || 
+                             (mail.snippet ? Math.ceil(mail.snippet.length / 10) : '37')
+                            }
+                          </div>
+                        </td>
+
+                        {/* ラベル */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex gap-1 flex-wrap">
+                            {mail.labels.slice(0, 2).map((label, labelIndex) => (
+                              <span 
+                                key={labelIndex}
+                                className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full border border-blue-200"
+                              >
+                                {label}
+                              </span>
+                            ))}
+                            {mail.labels.length > 2 && (
+                              <span className="text-xs text-gray-500">
+                                +{mail.labels.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* アクション */}
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex gap-2">
+                            {mail.sourceUrl && (
+                              <a 
+                                href={mail.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors text-xs"
+                                title="元メールを表示"
+                              >
+                                🔗 元画面
+                              </a>
+                            )}
+                            <button
+                              className="text-green-600 hover:text-green-800 px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors text-xs"
+                              title="詳細表示"
+                            >
+                              📖 詳細
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
 

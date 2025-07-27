@@ -382,11 +382,11 @@ export class WebCalibScraper {
         const allButtons = await this.page.$$eval('input, button, a', elements =>
           elements.map(el => ({
             tag: el.tagName,
-            type: el.type || '',
-            value: el.value || '',
+            type: (el as HTMLInputElement).type || '',
+            value: (el as HTMLInputElement).value || '',
             text: el.textContent?.trim() || '',
-            onclick: el.onclick?.toString() || '',
-            href: el.href || '',
+            onclick: (el as any).onclick?.toString() || '',
+            href: (el as HTMLAnchorElement).href || '',
             className: el.className || ''
           })).filter(el => 
             el.text.includes('メッセージ') || 
@@ -434,10 +434,9 @@ export class WebCalibScraper {
           console.log(`🔍 クリック前URL: ${beforeUrl}`);
           
           // 新しいページ（タブ）が開くのを待機
-          const [newPage] = await Promise.all([
-            this.context!.waitForEvent('page'), // 新しいページを待機
-            this.page.click(selector) // ボタンをクリック
-          ]);
+          const newPagePromise = this.context?.waitForEvent('page');
+          await this.page.click(selector);
+          const newPage = await newPagePromise;
           
           managementButtonFound = true;
           console.log(`✅ メッセージ管理ボタンクリック完了: ${selector}`);
@@ -539,36 +538,93 @@ export class WebCalibScraper {
 
   /**
    * フレーム内からメール一覧を抽出
+   * Phase 3: テーブル行全体から各列の情報を抽出
    */
-  async extractMailListFromFrame(frame: any): Promise<Array<{subject: string, href: string, date: string}>> {
+  async extractMailListFromFrame(frame: any): Promise<Array<{
+    subject: string, 
+    href: string, 
+    date: string,
+    sender?: string,
+    recipient?: string,
+    size?: string,
+    processDate?: string,
+    createDate?: string
+  }>> {
     console.log('🔍 フレーム内メール一覧を抽出中...');
     
     try {
-      // より具体的にリンク要素のみを対象にする
-      const mailList = await frame.$$eval('a[href*="message_management33_view"]', (elements: any[]) => {
+      // テーブル行から詳細な列情報を抽出
+      const mailList = await frame.$$eval('table tr', (rows: any[]) => {
         const uniqueMailsMap = new Map(); // 重複除去用のMap
         
-        elements.forEach(el => {
-          const text = el.textContent?.trim() || '';
-          const href = el.href || '';
+        rows.forEach((row, rowIndex) => {
+          // メール詳細リンクを含む行のみ処理
+          const link = row.querySelector('a[href*="message_management33_view"]');
+          if (!link) return;
+          
+          const href = link.href || '';
+          const subject = link.textContent?.trim() || '';
           
           // より厳密な条件でフィルタリング
           const isValidMail = 
             href.includes('message_management33_view') && 
             href.includes('messageNo=') && 
             href.includes('jobseekerNo=') &&
-            text.length > 2 && // 空のリンクを除外
-            !text.includes('戻る') && // ナビゲーションリンクを除外
-            !text.includes('次へ') &&
-            !text.includes('前へ');
+            subject.length > 2 && // 空のリンクを除外
+            !subject.includes('戻る') && // ナビゲーションリンクを除外
+            !subject.includes('次へ') &&
+            !subject.includes('前へ');
           
           if (isValidMail) {
+            // テーブル行の全セル（td要素）を取得
+            const cells = Array.from(row.querySelectorAll('td')).map(td => 
+              td.textContent?.trim() || ''
+            );
+            
+            console.log(`🔍 行${rowIndex}: ${cells.length}個のセル`);
+            console.log(`   セル内容:`, cells.slice(0, 8)); // 最初の8列まで表示
+            
+            // 列の推定マッピング (画像から推測)
+            // 通常のテーブル構造: [チェックボックス, コミュ, 未読, 件名(リンク), 送信者, 受信者, 日付, メールメモ, 処理日時, 作成日時, サイズ, etc...]
+            let sender = '';
+            let recipient = '';
+            let mailDate = '';
+            let size = '';
+            let processDate = '';
+            let createDate = '';
+            
+            // セル数に応じて動的にマッピング
+            if (cells.length >= 8) {
+              // 画像の構造に基づく推定
+              sender = cells[4] || '';      // 送信者名 列
+              recipient = cells[5] || '';   // 受信者 列  
+              mailDate = cells[6] || '';    // 日付(ハッシュ)？列
+              size = cells[cells.length - 1] || '';  // 最後の列がサイズと推定
+              
+              // 日付系の列を探す (24/12/25 形式を探す)
+              for (let i = 6; i < cells.length - 1; i++) {
+                const cellValue = cells[i] || '';
+                if (cellValue.match(/\d{2}\/\d{2}\/\d{2}/) || cellValue.match(/\d{4}-\d{2}-\d{2}/)) {
+                  if (!processDate) {
+                    processDate = cellValue;
+                  } else if (!createDate) {
+                    createDate = cellValue;
+                  }
+                }
+              }
+            }
+            
             // hrefをキーとして重複除去
             if (!uniqueMailsMap.has(href)) {
               uniqueMailsMap.set(href, {
-                subject: text.substring(0, 100),
+                subject: subject.substring(0, 100),
                 href: href,
-                date: new Date().toISOString().split('T')[0] // 暫定的な日付
+                date: mailDate || processDate || createDate || new Date().toISOString().split('T')[0], // 優先順位付き
+                sender: sender.substring(0, 100),
+                recipient: recipient.substring(0, 100),
+                size: size.substring(0, 20),
+                processDate: processDate.substring(0, 50),
+                createDate: createDate.substring(0, 50)
               });
             }
           }
@@ -579,7 +635,11 @@ export class WebCalibScraper {
       
       console.log(`🎯 フレーム内で${mailList.length}件の一意なメールを発見:`);
       mailList.forEach((mail, i) => {
-        console.log(`   ${i + 1}. "${mail.subject}" - ${mail.href}`);
+        console.log(`   ${i + 1}. "${mail.subject}"`);
+        console.log(`      送信者: "${mail.sender}", 受信者: "${mail.recipient}"`);
+        console.log(`      日付: "${mail.date}", サイズ: "${mail.size}"`);
+        console.log(`      処理日時: "${mail.processDate}", 作成日時: "${mail.createDate}"`);
+        console.log(`      URL: ${mail.href}`);
       });
       
       return mailList;
@@ -592,7 +652,16 @@ export class WebCalibScraper {
   /**
    * メール一覧を取得
    */
-  async fetchMailList(): Promise<Array<{subject: string, href: string, date: string}>> {
+  async fetchMailList(): Promise<Array<{
+    subject: string, 
+    href: string, 
+    date: string,
+    sender?: string,
+    recipient?: string,
+    size?: string,
+    processDate?: string,
+    createDate?: string
+  }>> {
     if (!this.page) throw new Error('Page not initialized');
     
     console.log('📬 メール一覧を取得中...');
@@ -619,7 +688,7 @@ export class WebCalibScraper {
         
         if (frameMailList.length > 0) {
           console.log(`🎉 フレーム内で${frameMailList.length}件のメールを正常取得！処理を完了します`);
-          return frameMailList; // 成功時は即座に返す
+          return frameMailList as Array<{subject: string, href: string, date: string}>; // 成功時は即座に返す
         } else {
           console.log('⚠️ フレーム内でメールが見つかりませんでした - メインページにフォールバック');
         }
