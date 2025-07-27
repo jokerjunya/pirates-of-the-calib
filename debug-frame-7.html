@@ -1,0 +1,597 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja" lang="ja"><head>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+	<meta http-equiv="Content-Script-Type" content="text/javascript">
+	<meta http-equiv="Content-Style-Type" content="text/css">
+	<link rel="stylesheet" type="text/css" href="/webcalib/css/common.css?20250727">
+	<link rel="stylesheet" type="text/css" href="/webcalib/library/jquery-ui-1.12.0.css">
+	<link rel="stylesheet" type="text/css" href="/webcalib/css/dialog_fix.css?20250727">
+	<script type="text/javascript" src="/webcalib/library/jquery-1.12.4.js"></script>
+    <script type="text/javascript" src="/webcalib/library/jquery-ui-1.12.0.js"></script>
+	<script type="text/javascript" src="/webcalib/js/common_renv.js"></script>
+	<script type="text/javascript" src="/webcalib/js/updatecheck.js"></script>
+	<script type="text/javascript" src="/webcalib/js/searchlist_renv.js"></script>
+
+<title>メッセージ一覧</title>
+<script type="text/javascript" src="/webcalib/js/message_management.js"></script>
+<script language="JavaScript">
+<!--
+function careerSheetImageView() {
+	var jobseekerNo = document.forms[0].jobseekerNo.value;
+	var action = "career_sheet_image_view?jobseekerNo=" + jobseekerNo +
+	             "&careerSheetStatusKbnCode=1&imageInputFlg=true";
+	var target = "career_sheet_image" + jobseekerNo;
+
+	submitForm(action, target, false);
+}
+
+function jobseekerStatusUpdate() {
+
+	if (!confirm("変更処理を行います。よろしいですか？")) {
+		return;
+	}
+
+	// エラーチェック
+	errorFlag = false;
+	errorMsg = "";
+	// サービスST必須エラー
+	if (document.forms[0].serviceStatusCode.value == "") {
+		// エラー
+		document.forms[0].serviceStatusCode.style.backgroundColor = "RED";
+		errorMsg = "*サービスSTは必須入力\n";
+		errorFlag = true;;
+	} else {
+		document.forms[0].serviceStatusCode.style.backgroundColor = "WHITE";
+	}
+
+	// コミュST必須エラー
+	if (document.forms[0].communicationStatusCode.value == "") {
+		// エラー
+		document.forms[0].communicationStatusCode.style.backgroundColor = "RED";
+		errorMsg = errorMsg + "*コミュSTは必須入力\n";
+		errorFlag = true;;
+	} else {
+		document.forms[0].communicationStatusCode.style.backgroundColor = "WHITE";
+	}
+
+	if (isMaxLength(document.forms[0].communicationComment.value, 120)) {
+		// エラー
+		document.forms[0].communicationComment.style.backgroundColor = "RED";
+		errorMsg = errorMsg + "*コミュコメントは全角60文字以内";
+		errorFlag = true;;
+	} else {
+		document.forms[0].communicationComment.style.backgroundColor = "WHITE";
+	}
+
+	if (errorFlag) {
+		alert(errorMsg);
+		return;
+	}
+
+	document.forms[0].action = "message_management_status_update";
+	document.forms[0].target = "message_frame_3";
+	document.forms[0].submit();
+
+	return;
+}
+
+function alermStart() {
+
+	if (!confirm("アラームを設定します。よろしいですか？")) {
+		return;
+	}
+
+	if (document.forms[0].alermTerm.value == "") {
+		// エラー
+		document.forms[0].alermTerm.style.backgroundColor = "RED";
+		alert("アラーム期間を入力してください。");
+		return;
+	}
+
+	if (isMaxLength(document.forms[0].alermTerm.value, 3)) {
+		// エラー
+		document.forms[0].alermTerm.style.backgroundColor = "RED";
+		alert("アラーム期間は半角数字3文字以内");
+		return;
+	}
+	if (!isNumber(document.forms[0].alermTerm.value)) {
+		// エラー
+		document.forms[0].alermTerm.style.backgroundColor = "RED";
+		alert("アラーム期間は半角数字のみ");
+		return;
+	}
+
+	document.forms[0].alermTerm.style.backgroundColor = "WHITE";
+
+	document.forms[0].action = "message_management_alerm_start";
+	document.forms[0].target = "message_frame_31";
+	document.forms[0].submit();
+
+	return;
+}
+
+function alermStop() {
+
+	if (!confirm("アラームを解除します。よろしいですか？")) {
+		return;
+	}
+
+	document.forms[0].action = "message_management_alerm_stop";
+	document.forms[0].target = "message_frame_31";
+	document.forms[0].submit();
+
+	return;
+}
+
+function statusChange(act) {
+	var form32 = parent.frames["message_frame_32"].document.forms[0];
+
+	if (!checkSelected2(form32)) {
+		alert("対象を選択してください。");
+		return;
+	}
+
+	form32.updateFolderList.value = "true";
+	var action = "message_management_" + act + "?" + getOpenFolders() + "&" + getOffset();
+	var target = "message_frame_32";
+	submitForm2(action, target, false, form32);
+}
+
+// Append 050620 START 見積番号224
+function mailCheckFlagChange(act) {
+	var form32 = parent.frames["message_frame_32"].document.forms[0];
+
+	if (!checkSelected2(form32)) {
+		alert("対象を選択してください。");
+		return;
+	}
+
+	form32.updateFolderList.value = "true";
+	var action = "message_management_mail_check?checkflag=" + act + "&" + getOpenFolders() + "&" + getOffset();
+	var target = "message_frame_32";
+	submitForm2(action, target, false, form32);
+}
+// Append 050620 END 見積番号224
+
+function deleteMessage() {
+	var form32 = parent.frames["message_frame_32"].document.forms[0];
+
+	if (!checkSelected2(form32)) {
+		alert("対象を選択してください。");
+		return;
+	}
+
+	if (confirm("削除します。よろしいですか？")) {
+		form32.updateFolderList.value = "true";
+		var action = "message_management_message_delete?" + getOpenFolders() + "&" + getOffset();
+		var target = "message_frame_32";
+		submitForm2(action, target, false, form32);
+	}
+}
+
+function setCaCode() {
+
+	var frame2  = top.frames["message_frame_2"];
+	var form21 = frame2.frames["message_frame_21"].document.forms[0];
+
+	var	form = document.forms[0];
+	form.caCode.value       = form21.backupCaCode.value;
+	form.caChargeCode.value = form21.backupCaCode.value;
+	form.caGroup.value      = form21.caGroupCode.value;
+	form.caGroupCode.value  = form21.caGroupCode.value;
+}
+
+function autoDivide() {
+	var frame2  = top.frames["message_frame_2"];
+	var form21 = frame2.frames["message_frame_21"].document.forms[0];
+	var form32 = parent.frames["message_frame_32"].document.forms[0];
+
+	if (!checkSelected2(form32)) {
+		alert("対象を選択してください。");
+		return;
+	}
+
+	if (isMessageDirty()) {
+		if (!confirm("入力中のデータが無効になります。よろしいですか？")) {
+			return;
+		}
+	}
+
+	form32.caCode.value = form21.backupCaCode.value;
+	form32.updateFolderList.value = "true";
+	var action = "message_management_auto_divide?" + getOpenFolders() + "&" + getOffset();
+	var target = "message_frame_32";
+	submitForm2(action, target, false, form32);
+}
+
+function messageReceive() {
+	if (isMessageDirty()) {
+		if (!confirm("入力中のデータが無効になります。よろしいですか？")) {
+			return false;
+		}
+	}
+
+	setCaCode();
+	// DBLoad START ADD 2017/05/19
+	document.forms[0].filterJobseekerFlag.value = "0";
+	// DBLoad END ADD 2017/05/19
+	var action = "message_management_receive?" + getOpenFolders() + "&" + getOffset();
+	var target = "_top";
+	submitForm(action, target);
+
+	return true;
+}
+
+function caProgressSearch() {
+	var form = document.forms[0];
+	var url = "ca_progress_search?jobseekerNo=" + form.jobseekerNo.value;
+	var title = "ca_progress_search";
+
+	window.open(url, title);
+}
+
+// Append 050405 START 見積番号191
+function checkAll(){
+	var form32 = parent.frames["message_frame_32"].document.forms[0];
+	var count = form32.count.value;
+	var chk = form32.check;
+
+	if (chk != null) {
+		if (count == 1) {
+			chk.checked = true;
+		} else {
+			for(var i=0; i<chk.length; i++){
+				if(chk[i].checked == false){
+					chk[i].checked = true;
+				}
+			}
+		}
+	}
+}
+
+function uncheckAll(){
+	var form32 = parent.frames["message_frame_32"].document.forms[0];
+	var count = form32.count.value;
+	var chk = form32.check;
+
+	if (chk != null) {
+		if (count == 1) {
+			chk.checked = false;
+		} else {
+			for(var i=0; i<chk.length; i++){
+				if(chk[i].checked == true){
+					chk[i].checked = false;
+				}
+			}
+		}
+	}
+}
+// Append 050405 END 見積番号191
+
+// Append 051027 START 見積番号P04
+function seminarRegister() {
+
+	var form = document.forms[0];
+	var url = "seminar_register_view?jobseekerNo=" + form.jobseekerNo.value;
+	var title = "seminar_register_view" + form.jobseekerNo.value;
+
+	window.open(url, title);
+}
+// Append 051027 END 見積番号P04
+
+function setTransitionInfo(info) {
+	var form = document.forms[0];
+	form.transitionInfo.value = info;
+}
+
+// -->
+</script>
+</head>
+<body marginwidth="2" marginheight="0">
+
+<form name="statusForm" method="post" action="/webcalib/app/message_management31_view?CLB31A" id="statusForm">
+<input type="hidden" name="sn" value="ed2385aa9980a0560238cedaaf9836b2" style="">
+<input type="hidden" name="jp.co.ablic.poc.web.PocAction.BEFORE_PROCESS_TSTAMP_KEY" value="1753625976304" style="">
+<input type="hidden" name="jp.co.ablic.poc.web.PocAction.AFTER_PROCESS_TSTAMP_KEY" value="1753625976312" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.reloadButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.stopButton" value="2" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.introButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.imageUpdateButton" value="2" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.seminarRegistButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.communciationRegisterButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.receiveButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.imageReferButton" value="2" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.startButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.communicationComment" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.communicationStatusCode" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.cellular" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.mailRegisterButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.ngDayRegistButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.alermTerm" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.deleteButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.messageSearchButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.jobseekerManagementButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.serviceStatusCode" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.statusUpdateButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.mailCheckOffButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.signatureListButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.autoDistButton" value="2" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.caProgressButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.mailCheckOnButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.readButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.StatusForm.unreadButton" value="3" style="">
+<input type="hidden" name="updateCheckFlag" value="false" style="">
+<input type="hidden" name="flag" value="" style="">
+
+
+
+<input type="hidden" name="inspectFlag" value="false" style="">
+<input type="hidden" name="jobseekerNo" value="J025870" style="">
+<input type="hidden" name="folderNo" value="1010667667" style="">
+<input type="hidden" name="caCode" value="7000123" style="">
+<input type="hidden" name="transitionInfo" value="" style="">
+<input type="hidden" name="caChargeCode" value="" style="">
+<input type="hidden" name="caGroup" value="" style="">
+<input type="hidden" name="caGroupCode" value="" style="">
+
+<input type="hidden" name="careerSheetStatusKbnCode" value="1" style="">
+<input type="hidden" name="imageInputFlg" value="true" style="">
+
+<input type="hidden" name="alermStatus" value="0" style="">
+<input type="hidden" name="archiveMessageFlag" value="false" style="">
+
+<input type="hidden" name="filterJobseekerFlag" value="" style="">
+
+<input type="hidden" name="pdt2JudgmentFlg" value="true" style="">
+<input type="hidden" name="processDateFrom" value="" style="">
+
+<table width="100%">
+	<tbody><tr>
+		<td align="left" nowrap="">
+			<input type="text" name="jobseekerNameKanji" size="35" value="稲垣　零零五" readonly="readonly" style="background-color: rgb(238, 238, 238); border: 1px solid gray; padding: 2px; height: 20px;">
+			
+				
+				
+			
+			
+			
+		</td>
+		<td align="right" nowrap="">
+
+			<input type="button" name="ngDayRegistButton" value="NG日登録" onclick="submitForm('/webcalib/app/message_management_ng_regist_check?CLB31A', null, false)" style="width: 74px;" class="newwindow">
+
+			<input type="button" name="pdtApplyRecommendButton" value="PDT応募推薦" onclick="setTransitionInfo('pdtApplyRecommend');submitForm('/webcalib/app/matching_list_search_view?CLB31A', 'matching_list_searchJ025870', false)" style="width: 80px;" class="newwindow">
+			<input type="button" name="messageSearchButton" value="メッセージ検索" onclick="setCaCode();submitForm('/webcalib/app/message_search_view?transitionCode=1&amp;CLB31A', 'message_search', false)" style="width: 80px;" class="newwindow">
+			<input type="button" name="signatureListButton" value="署名一覧" onclick="setCaCode();submitForm('/webcalib/app/signature_list_view?CLB31A', 'signature_list', false)" style="width: 60px;" class="newwindow">
+			<input type="button" name="jobseekerManagementButton" value="求職者管理" onclick="setCaCode();submitForm('/webcalib/app/jobseeker_management_view?threeBrosFlag=1&amp;CLB31A', 'jobseeker_management', false)" style="width: 75px;" class="newwindow">
+
+			<input type="button" name="caProgressButton" value="CA進捗管理" onclick="caProgressSearch()" style="width: 75px;" class="newwindow">
+			<input type="button" name="introButton" value="紹介案件管理" onclick="setTransitionInfo('intro');submitForm('/webcalib/app/matching_list_search_view?CLB31A', 'matching_list_searchJ025870', false)" style="width: 80px;" class="newwindow">
+			<input type="button" name="seminarRegistButton" value="セミナー登録" onclick="seminarRegister()" style="width: 75px;" class="newwindow">
+		</td>
+	</tr>
+</tbody></table>
+
+<table width="100%" cellspacing="0" cellpadding="1" style="padding: 0px 1px 0px 1px">
+	<tbody><tr>
+		<td valign="top" rowspan="2">
+			<table class="box">
+				<tbody><tr>
+					<td valign="top">
+						<table cellspan="1" cellpadding="1">
+							<tbody><tr>
+								<th nowrap="">サービスST</th>
+								<td>
+									<select name="serviceStatusCode" size="1" style="width: 150px"><option value="">　　　</option>
+<option value="010">適職紹介受付</option>
+<option value="020">受付内容確認中</option>
+<option value="030" selected="selected">面談セット中</option>
+<option value="040">CA面談セット中</option>
+<option value="050">面談セット完了</option>
+<option value="060">要意向確認</option>
+<option value="070">要マッチング</option>
+<option value="080">案件紹介中</option>
+<option value="090">案件再紹介中</option>
+<option value="100">接触後保留</option>
+<option value="110">応募書類回収中</option>
+<option value="115">リリース確認中</option>
+<option value="116">セカンド呼込(RSS用)</option>
+<option value="120">書類選考中</option>
+<option value="130">書類OK</option>
+<option value="140">企業内定</option>
+<option value="150">内定(退社交渉中)</option>
+<option value="160">内定(入社決定)</option>
+<option value="170">NA</option>
+<option value="180">入社済</option>
+<option value="190">終了</option>
+<option value="195">N１サービス中</option>
+<option value="196">N２サービス中</option>
+<option value="197">N３サービス中</option>
+<option value="198">N４サービス中</option>
+<option value="210">派遣中(Leo専用)</option>
+<option value="200">移行時保留</option></select>
+								</td>
+							</tr>
+							<tr>
+								<th>コミュST</th>
+								<td>
+									<select name="communicationStatusCode" size="1" style="width: 150px"><option value="">　　　</option>
+<option value="1" selected="selected">未処理</option>
+<option value="2">返信待ち</option>
+<option value="3">処理済</option>
+<option value="4">保留</option>
+<option value="5">Push中</option>
+<option value="6">FTel未</option>
+<option value="f">当FTe1</option>
+<option value="7">当FTe2</option>
+<option value="8">翌FTe2</option>
+<option value="a">FTEL3</option>
+<option value="b">PUSH1</option>
+<option value="c">PUSH2</option>
+<option value="d">PUSH3</option>
+<option value="e">G戻し</option></select>
+								</td>
+							</tr>
+							<tr>
+								<td nowrap="" colspan="2">
+									<span class="input_title">PDT</span>
+									<input type="text" name="pdt" maxlength="5" size="8" value="サービス中" readonly="readonly" style="background-color: rgb(238, 238, 238); border: 1px solid gray; padding: 2px; height: 20px;">
+									<span class="input_title">ケータイPDT</span>
+									<input type="text" name="mobilepdt" maxlength="6" size="13" value="" readonly="readonly" style="background-color: rgb(238, 238, 238); border: 1px solid gray; padding: 2px; height: 20px;">
+								</td>
+							</tr>
+							
+								<tr>
+									<td>
+										<img title="RAG MyPage" src="../img/ragMyPage.gif" border="0">
+									</td>
+								</tr>
+							
+						</tbody></table>
+					</td>
+					<td valign="top">
+						<table cellspacing="0" cellpadding="0">
+							<tbody><tr>
+								<th nowrap="">コミュコメント</th>
+							</tr>
+							<tr>
+								<td>
+								
+								<textarea name="communicationComment" cols="38" rows="3" wrap="soft" style="height: 48px;" class="fixed_font imeOn"></textarea>
+								</td>
+							</tr>
+							<tr>
+								<td align="right" colspan="2">
+									<input type="button" name="statusUpdateButton" value="変更" onclick="jobseekerStatusUpdate()" style="width: 75px;">
+								</td>
+							</tr>
+						</tbody></table>
+					</td>
+					
+					<td valign="top">
+						<table cellspacing="0" cellpadding="0">
+							<tbody><tr>
+								<th nowrap="">連絡先携帯</th>
+							</tr>
+							<tr>
+								<td>
+									<input type="text" name="cellular" size="20" value="080-1234-5678" readonly="readonly" style="position: relative; top: 1px; background-color: rgb(238, 238, 238); border: 1px solid gray; padding: 2px; height: 20px;">
+								</td>
+							</tr>
+						</tbody></table>
+					</td>
+					
+				</tr>
+			</tbody></table>
+		</td>
+		<td valign="top" style="width: 90px;">
+			<table class="box" width="100%" cellspacing="2" cellpadding="0">
+				<tbody><tr>
+					<th>PDT CS</th>
+				</tr>
+				<tr>
+					<td align="center">
+						<input type="button" name="imageReferButton" value="参照" onclick="careerSheetImageView()" disabled="disabled" readonly="readonly" style="width: 60px;" class="newwindow">
+					</td>
+				</tr>
+				<tr>
+					<td align="center">
+						<input type="button" name="imageUpdateButton" value="訂正" onclick="submitForm('/webcalib/app/resume_writing_view?CLB31A', 'resume_writingJ025870', false)" disabled="disabled" readonly="readonly" style="width: 60px;" class="newwindow">
+					</td>
+				</tr>
+			</tbody></table>
+		</td>
+		<td valign="top" style="width: 175px;">
+			<table class="box" cellspacing="1" cellpadding="1" width="100%">
+				<tbody><tr>
+					<td>
+						<table cellspacing="1" cellpadding="0">
+							<tbody><tr>
+								<td rowspan="2" align="left" width="45px">
+									<nobr>
+										
+											
+											
+										
+									</nobr>
+								</td>
+									<th colspan="2">アラーム</th>
+							</tr>
+							<tr>
+								<td align="left" width="50px">
+									<nobr>
+										<input type="text" name="alermTerm" maxlength="3" size="4" value="" style="height: 20px;" class="num imeOff">日
+									</nobr>
+								</td>
+								<td>
+									<input type="button" name="startButton" value="スタート" onclick="alermStart()" style="width: 55px;">
+								</td>
+							</tr>
+							<tr>
+								<td align="center" colspan="2">
+									&nbsp;
+									<input type="hidden" name="alermDate" value="" style="">
+								</td>
+								<td>
+									<input type="button" name="stopButton" value="ストップ" onclick="alermStop()" disabled="disabled" readonly="readonly" style="width: 55px;">
+								</td>
+							</tr>
+						</tbody></table>
+					</td>
+				</tr>
+			</tbody></table>
+		</td>
+	</tr>
+		<tr>
+		<td colspan="2">
+			<table class="box" width="100%" cellspacing="1" cellpadding="0">
+				<tbody>
+				<tr>
+					<td>
+						&nbsp;<b>面力</b><input type="text" name="seminarStartInterview" maxlength="8" size="8" value="" readonly="readonly" style="background-color: rgb(238, 238, 238); border: 1px solid gray; padding: 2px; height: 20px;">
+						<b>職歴</b><input type="text" name="seminarStartCareer" maxlength="8" size="8" value="" readonly="readonly" style="background-color: rgb(238, 238, 238); border: 1px solid gray; padding: 2px; height: 20px;">
+						<b>セル</b><input type="text" name="seminarStartDemand" maxlength="8" size="8" value="" readonly="readonly" style="background-color: rgb(238, 238, 238); border: 1px solid gray; padding: 2px; height: 20px;">
+					</td>
+				</tr>
+				</tbody>
+			</table>
+		</td>
+	</tr>
+</tbody></table>
+<table width="100%">
+	<tbody><tr>
+		<td nowrap="">
+			<input type="button" name="selectAllButton" value="全選択 " onclick="checkAll()" style="width: 60px;">
+			<input type="button" name="unselectAllButton" value="全解除 " onclick="uncheckAll()" style="width: 60px;">
+			<input type="button" name="readButton" value="既読" onclick="statusChange('read')" style="width: 60px;">
+			<input type="button" name="unreadButton" value="未読" onclick="statusChange('unread')" style="width: 60px;">
+
+			<input type="button" name="mailCheckOnButton" value="！ON" onclick="mailCheckFlagChange('1')" style="width: 60px;">
+			<input type="button" name="mailCheckOffButton" value="！OFF" onclick="mailCheckFlagChange('0')" style="width: 60px;">
+			<input type="button" name="deleteButton" value=" 削除 " onclick="deleteMessage()" style="width: 60px;">
+			<input type="button" name="autoDistButton" value="自動振分" onclick="autoDivide()" disabled="disabled" readonly="readonly" style="width: 60px;">
+		</td>
+		<td align="right" nowrap="">
+			<input type="button" name="reloadButton" value="更新" onclick="submitForm('/webcalib/app/message_management3_view', 'message_frame_3', false)" style="width: 80px;">
+			<input type="button" name="receiveButton" value="受信" onclick="messageReceive()" style="width: 80px;">
+			<input type="button" name="mailRegisterButton" value="メール作成" onclick="setCaCode();submitForm('/webcalib/app/mail_view?mode=1&amp;CLB31A', '_blank', false)" style="width: 80px;" class="newwindow">
+			<input type="button" name="communciationRegisterButton" value="コミュ追加" onclick="setCaCode();submitForm('/webcalib/app/communication_registser_view?mode=1&amp;CLB31A', '_blank', false)" style="width: 80px;" class="newwindow">
+		</td>
+	</tr>
+</tbody></table>
+
+
+<input type="hidden" name="complete" value="true" style=""></form>
+
+
+
+
+<script language="JavaScript">
+
+</script>
+
+
+
+
+
+</body></html>

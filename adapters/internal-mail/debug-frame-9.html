@@ -1,0 +1,242 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja" lang="ja"><head>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+	<meta http-equiv="Content-Script-Type" content="text/javascript">
+	<meta http-equiv="Content-Style-Type" content="text/css">
+	<link rel="stylesheet" type="text/css" href="/webcalib/css/common.css?20170724">
+	<script type="text/javascript" src="/webcalib/js/common.js"></script>
+	<script type="text/javascript" src="/webcalib/js/updatecheck.js"></script>
+	<script type="text/javascript" src="/webcalib/js/searchlist.js"></script>
+
+<script type="text/javascript" src="/webcalib/js/message_management.js"></script>
+<script language="JavaScript">
+<!--
+function addCustomFolder() {
+	var obj = document.forms[0];
+	var obj2 = parent.frames["message_frame_21"].document.forms[0];
+	// DBLoad START ADD 2017/05/19
+	var obj22 = parent.frames["message_frame_22"].document.forms[0];
+	// DBLoad END ADD 2017/05/19
+
+	var changenameFlag = 0;
+	do {
+		var changename = prompt("フォルダ名を入力してください", "");
+		if (changename == null) {
+			// nullの場合は「キャンセル」なので何もしない
+			return;
+		}
+		if (changename != null && changename == "") {
+			alert("フォルダ名を入力してください。");
+			changenameFlag = 0;
+		} else {
+			changenameFlag = 1;
+		}
+	} while (changenameFlag == 0)
+
+	if (isMaxLength(changename, 30)) {
+		// エラー
+		alert("*フォルダ名は全角15文字以内");
+		return;
+	}
+
+	obj.folderName.value = changename;
+	obj.caCode.value = obj2.caCode.value;
+	obj.backupCaCode.value = obj2.backupCaCode.value;
+	obj.processDateFrom.value= obj2.processDateFrom.value;
+	// DBLoad START ADD 2017/05/19
+	if (obj22.filterJobseekerFlag.value == '1') {
+		obj.jobseekerNo.value = obj22.jobseekerNo.value;
+	}
+	obj.filterJobseekerFlag.value = obj22.filterJobseekerFlag.value;
+	// DBLoad END ADD 2017/05/19
+
+	obj.action = "message_management_folder_add?" + getOpenFolders() + "&" + getOffset();
+	obj.target = "message_frame_2";
+	obj.submit();
+
+	return;
+}
+
+function changeFolder() {
+	var obj = document.forms[0];
+	var frame21 = parent.frames["message_frame_21"].document.forms[0];
+	var frame22 = parent.frames["message_frame_22"].document.forms[0];
+
+	frame22.selectedFolderNo.value;
+	if (frame22.selectedFolderNo.value == null || 
+			frame22.selectedFolderNo.value == "") {
+		alert("カスタマイズフォルダを選択してください。");
+		return;
+	}
+
+	var changename = 0;
+	do {
+		var changename = prompt("フォルダ名を入力してください", frame22.selectedFolderName.value);
+		if (changename == null) {
+			// nullの場合は「キャンセル」なので何もしない
+			return;
+		}
+		if (changename != null && changename == "") {
+			alert("フォルダ名を入力してください。");
+			changenameFlag = 0;
+		} else {
+			changenameFlag = 1;
+		}
+	} while (changenameFlag == 0)
+
+	if (isMaxLength(changename, 30)) {
+		// エラー
+		alert("*フォルダ名は全角15文字以内");
+		return;
+	}
+
+	obj.folderName.value = changename;
+	obj.folderNo.value = frame22.selectedFolderNo.value;
+	obj.caCode.value = frame21.caCode.value;
+	obj.backupCaCode.value = frame21.backupCaCode.value;
+	obj.processDateFrom.value= frame21.processDateFrom.value;
+	// DBLoad START ADD 2017/05/19
+	if (frame22.filterJobseekerFlag.value == '1') {
+		obj.jobseekerNo.value = frame22.jobseekerNo.value;
+	}
+	obj.filterJobseekerFlag.value = frame22.filterJobseekerFlag.value;
+	// DBLoad END ADD 2017/05/19
+
+	obj.action = "message_management_folder_change?" + getOpenFolders() + "&" + getOffset();
+	obj.target = "message_frame_2";
+	obj.submit();
+
+	return;
+}
+
+function deleteFolder() {
+
+	var obj = document.forms[0];
+	var frame21 = parent.frames["message_frame_21"].document.forms[0];
+	var frame22 = parent.frames["message_frame_22"].document.forms[0];
+
+	var frame3 = top.frames["message_frame_3"];
+	var frame32 = frame3.frames["message_frame_32"].document.forms[0];
+
+
+	obj.deleteFolderNo.value = frame22.selectedFolderNo.value;
+	if (obj.deleteFolderNo.value == null || obj.deleteFolderNo.value == "") {
+		alert("カスタマイズフォルダを選択してください。");
+		return;
+	}
+
+	// frame32からメッセージ件数を取得
+	var messageCount = 0;
+	if (frame32 != null) {
+		var cnt = frame32.count.value;
+		if (cnt != null) {
+			messageCount = cnt;
+		}
+	}
+
+	// 削除確認
+	if (messageCount > 0) {
+		var message = "フォルダ内にあるメールは全て削除されますがよろしいですか？（{0}件）"
+		if (!confirm(message.replace("{0}", messageCount))) {
+			return;
+		}
+	} else {
+		if (!confirm("フォルダを削除します。よろしいですか？")) {
+			return;
+		}
+	}
+	// 変更項目の無効確認
+	if (isMessageDirty()) {
+		if (!confirm("入力中のデータが無効になります。よろしいですか？")) {
+			return;
+		}
+	}
+
+	obj.folderNo.value = "";
+	obj.caCode.value = frame21.caCode.value;
+	obj.backupCaCode.value = frame21.backupCaCode.value;
+	obj.processDateFrom.value= frame21.processDateFrom.value;
+	// DBLoad START ADD 2017/05/19
+	if (frame22.filterJobseekerFlag.value == '1') {
+		obj.jobseekerNo.value = frame22.jobseekerNo.value;
+	}
+	obj.filterJobseekerFlag.value = frame22.filterJobseekerFlag.value;
+	// DBLoad END ADD 2017/05/19
+
+	obj.action = "message_management_folder_delete?" + getOpenFolders() + "&" + getOffset();
+	obj.target = "_top";
+	obj.submit();
+
+	return;
+}
+
+// APPEND 20060323 見積274 START
+function distributorFolder() {
+	// テンプレートフォルダが選択されていた場合	
+	var frame22 = parent.frames["message_frame_22"].document.forms[0];
+	if (frame22.selected.value == "template_common" || frame22.selected.value == "template_private") {
+		alert("テンプレートフォルダにはMy振分を登録できません。");
+		return;
+	}
+
+	// フォルダが選択されていない場合
+	var frame3 = top.frames["message_frame_3"];
+	var frame31 = frame3.frames["message_frame_31"].document.forms[0];
+
+	if(frame22.selected.value == null || frame22.selected.value == ""){
+		if(frame22.selectedFolderNo.value == null ||
+			frame22.selectedFolderNo.value == ""){
+			alert("振分先フォルダを選択してください。");
+			return;
+		}
+	}
+
+	var url = "mail_distribution_regist_view";
+	var param1 = "folderNo=" + frame31.folderNo.value;
+	var target = "mail_distribution_regist";
+	submitForm(url + "?" + param1, target, false);
+}
+// APPEND 20060323 見積274 END
+
+
+// -->
+</script>
+</head>
+<body marginwidth="2" marginheight="2">
+
+<form name="folderSearchForm" method="post" action="/webcalib/app/message_management23_view?CLB31A" id="folderSearchForm">
+<input type="hidden" name="sn" value="d41c76c7e414fa74c3b0cbf8a2c223f6" style="">
+<input type="hidden" name="updateCheckFlag" value="false" style="">
+<input type="hidden" name="flag" value="" style="">
+
+
+
+<input type="hidden" name="caCode" value="" style="">
+<input type="hidden" name="backupCaCode" value="" style="">
+<input type="hidden" name="folderNo" value="" style="">
+<input type="hidden" name="folderName" value="" style="">
+<input type="hidden" name="deleteFolderNo" value="" style="">
+
+<input type="hidden" name="filterJobseekerFlag" value="" style="">
+<input type="hidden" name="jobseekerNo" value="" style="">
+
+<input type="hidden" name="processDateFrom" value="" style="">
+
+<table class="box" width="100%">
+	<tbody><tr>
+		<td nowrap="">
+			<input type="button" name="addButton" value=" 追加 " onclick="addCustomFolder()" style="width: 35px;">
+			<input type="button" name="deleteButton" value=" 削除 " onclick="deleteFolder()" style="width: 35px;">
+			<input type="button" name="changeButton" value="フォルダ名変更" onclick="changeFolder()" style="width: 85px;">
+			<input type="button" name="myDistributorButton" value="My振分" onclick="distributorFolder()" style="width: 50px;" class="newwindow">
+		</td>
+	</tr>
+</tbody></table>
+
+
+
+<input type="hidden" name="complete" value="true" style=""></form>
+
+
+
+</body></html>

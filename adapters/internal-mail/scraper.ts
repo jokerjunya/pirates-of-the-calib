@@ -544,31 +544,40 @@ export class WebCalibScraper {
     console.log('🔍 フレーム内メール一覧を抽出中...');
     
     try {
-      const mailList = await frame.$$eval('table tr, .list2 tr, div[class*="mail"], a[href*="message"]', (elements: any[]) =>
-        elements.map(el => {
+      // より具体的にリンク要素のみを対象にする
+      const mailList = await frame.$$eval('a[href*="message_management33_view"]', (elements: any[]) => {
+        const uniqueMailsMap = new Map(); // 重複除去用のMap
+        
+        elements.forEach(el => {
           const text = el.textContent?.trim() || '';
-          const href = el.href || (el.querySelector('a') as HTMLAnchorElement)?.href || '';
+          const href = el.href || '';
           
-          // メール関連のキーワードを含むかチェック
-          const isMailRelated = 
-            text.includes('CS通達') || 
-            text.includes('面接') || 
-            text.includes('メール') ||
-            href.includes('message_management33_view') ||
-            href.includes('message');
+          // より厳密な条件でフィルタリング
+          const isValidMail = 
+            href.includes('message_management33_view') && 
+            href.includes('messageNo=') && 
+            href.includes('jobseekerNo=') &&
+            text.length > 2 && // 空のリンクを除外
+            !text.includes('戻る') && // ナビゲーションリンクを除外
+            !text.includes('次へ') &&
+            !text.includes('前へ');
           
-          if (isMailRelated && text.length > 5 && href.length > 10) {
-            return {
-              subject: text.substring(0, 100),
-              href: href,
-              date: new Date().toISOString().split('T')[0] // 暫定的な日付
-            };
+          if (isValidMail) {
+            // hrefをキーとして重複除去
+            if (!uniqueMailsMap.has(href)) {
+              uniqueMailsMap.set(href, {
+                subject: text.substring(0, 100),
+                href: href,
+                date: new Date().toISOString().split('T')[0] // 暫定的な日付
+              });
+            }
           }
-          return null;
-        }).filter(item => item !== null)
-      );
+        });
+        
+        return Array.from(uniqueMailsMap.values());
+      });
       
-      console.log(`🎯 フレーム内で${mailList.length}件のメールを発見:`);
+      console.log(`🎯 フレーム内で${mailList.length}件の一意なメールを発見:`);
       mailList.forEach((mail, i) => {
         console.log(`   ${i + 1}. "${mail.subject}" - ${mail.href}`);
       });
@@ -663,10 +672,14 @@ export class WebCalibScraper {
                          if (hasCS || hasInterview || hasMail) {
                console.log(`🎯 フレーム${i}にメール関連コンテンツを発見！ CS通達:${hasCS} 面接:${hasInterview} メール:${hasMail}`);
                
-               // このフレームのHTMLを保存
-               const fs = require('fs');
-               fs.writeFileSync(`debug-frame-${i}.html`, frameContent, 'utf8');
-               console.log(`📄 フレーム${i}のHTML保存: debug-frame-${i}.html`);
+               // このフレームのHTMLを保存（Node.js環境でのみ実行）
+               try {
+                 const fs = await import('fs');
+                 fs.writeFileSync(`debug-frame-${i}.html`, frameContent, 'utf8');
+                 console.log(`📄 フレーム${i}のHTML保存: debug-frame-${i}.html`);
+               } catch (fsError) {
+                 console.log(`⚠️ フレーム${i}のHTML保存をスキップ（ブラウザ環境）`);
+               }
                
                // フレーム内でメール一覧を直接探してみる
                try {
@@ -707,6 +720,12 @@ export class WebCalibScraper {
                      console.log(`🎯 実際のメールリンク存在: ${hasRealMailLinks}`);
                      // このフレームでメール取得作業を継続するためのフラグ
                      (this as any).targetFrame = frame;
+                     
+                     // targetFrame設定後、すぐにそのフレームでメール取得を実行
+                     console.log('🎯 targetFrame設定完了 - 即座にメール取得を実行します');
+                     const finalMailList = await this.extractMailListFromFrame(frame);
+                     console.log(`🎉 フレーム${i}から${finalMailList.length}件のメールを取得完了！`);
+                     return finalMailList; // 即座に結果を返す
                    } else if (frameMailList.length > 0) {
                      console.log(`⚠️ フレーム${i}でメール発見も条件不一致: メール数=${frameMailList.length}, リンク=${hasRealMailLinks}, キーワード=${hasMailKeywords}, targetFrame既存=${!!(this as any).targetFrame}`);
                    }
@@ -766,9 +785,14 @@ export class WebCalibScraper {
       // 🚀 完全ページHTML取得・保存
       try {
         const fullHTML = await this.page.content();
-        const fs = require('fs');
-        fs.writeFileSync('debug-maillist-full.html', fullHTML, 'utf8');
-        console.log('📄 完全HTML保存: debug-maillist-full.html (ファイルを開いて実際の構造を確認可能)');
+        // Node.js環境でのみHTML保存を実行
+        if (typeof require !== 'undefined') {
+          const fs = require('fs');
+          fs.writeFileSync('debug-maillist-full.html', fullHTML, 'utf8');
+          console.log('📄 完全HTML保存: debug-maillist-full.html (ファイルを開いて実際の構造を確認可能)');
+        } else {
+          console.log('📄 HTML保存をスキップ（ブラウザ環境）');
+        }
         
         // HTMLの重要な部分を抽出して表示
         const htmlPreview = fullHTML.substring(0, 2000);

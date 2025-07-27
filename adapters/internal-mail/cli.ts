@@ -18,8 +18,8 @@ function loadConfigFromEnv(): ScraperConfig {
     baseUrl: process.env.WEBCALIB_BASE_URL || 'https://rt-calib.r-agent.com',
     loginUrl: process.env.WEBCALIB_LOGIN_URL || '/webcalib/app/logout?sn=21f10a00b9a7d4f4836e5f6077a672af&CLB31A',
     listUrl: process.env.WEBCALIB_LIST_URL || '/webcalib/app/message_management33_list',
-    username: process.env.WEBCALIB_USERNAME || '',
-    password: process.env.WEBCALIB_PASSWORD || '',
+    username: process.env.WEBCALIB_USERNAME || '7777319',
+    password: process.env.WEBCALIB_PASSWORD || 'password1!',
     targetEmail: process.env.WEBCALIB_TARGET_EMAIL || 'yuya_inagaki+005@r.recruit.co.jp',
     jobseekerNo: process.env.WEBCALIB_JOBSEEKER_NO || undefined,
     headless: process.env.WEBCALIB_HEADLESS !== 'false', // デフォルトはheadless

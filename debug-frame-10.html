@@ -1,0 +1,147 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja" lang="ja"><head>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+	<meta http-equiv="Content-Script-Type" content="text/javascript">
+	<meta http-equiv="Content-Style-Type" content="text/css">
+	<link rel="stylesheet" type="text/css" href="/webcalib/css/common.css?20170724">
+	<script type="text/javascript" src="/webcalib/js/common.js"></script>
+	<script type="text/javascript" src="/webcalib/js/updatecheck.js"></script>
+	<script type="text/javascript" src="/webcalib/js/searchlist.js"></script>
+
+<script type="text/javascript" src="/webcalib/js/message_management.js"></script>
+<script language="JavaScript">
+<!--
+function setCaCode() {
+	var frame2 = top.frames["message_frame_2"];
+	var obj = frame2.frames["message_frame_21"].document.forms[0];
+	var frame3 = top.frames["message_frame_3"];
+	var frame31 = frame3.frames["message_frame_31"].document.forms[0];
+
+	// CHANGE 070427 Protra4575 START
+	document.forms[0].caCode.value = obj.backupCaCode.value;
+	// ORG
+	//document.forms[0].caCode.value = obj.caCode.value;
+	// CHANGE 070427 Protra4575 END
+	document.forms[0].caGroupCode.value = obj.caGroupCode.value;
+	document.forms[0].jobseekerNo.value = frame31.jobseekerNo.value;
+
+	return;
+}
+
+
+function schdlAdjstJobseeker() {
+	setCaCode();
+	document.forms[0].action = "message_management_schdladjst_js_check";
+	document.forms[0].target = "message_frame_331";
+	document.forms[0].submit();
+	return false;
+}
+
+function schdlAdjstRa() {
+	setCaCode();
+	document.forms[0].action = "message_management_schdladjst_ra_check";
+	document.forms[0].target = "message_frame_331";
+	document.forms[0].submit();
+	return false;
+}
+
+
+function mailPrint() {
+	var url = "mail_print?messageNo=" + document.forms[0].messageNo.value;
+	window.open(url, "_blank", "width=1,height=1");
+	return;
+}
+
+function memoUpdate() {
+
+	if (!confirm("変更処理を行います。よろしいですか？")) {
+		return;
+	}
+
+	if (isMaxLength(document.forms[0].memo.value, 100)) {
+		// エラー
+		document.forms[0].memo.style.backgroundColor = "RED";
+		alert("*メールメモは全角50文字以内");
+		return;
+	}
+
+	// DBLoad START ADD 2017/05/19
+	var frame3 = top.frames["message_frame_3"];
+	var form32 = frame3.frames["message_frame_32"].document.forms[0];
+	document.forms[0].redirectPage.value = "true";
+	// DBLoad END ADD 2017/05/19
+	
+	document.forms[0].memo.style.backgroundColor = "WHITE";
+
+	document.forms[0].action = "message_management_memo_update";
+	document.forms[0].target = "message_frame_3";
+	document.forms[0].submit();
+
+	return;
+}
+
+function jobseekerAddressRegist() {
+
+	var frame3 = top.frames["message_frame_3"];
+	var frame31 = frame3.frames["message_frame_31"].document.forms[0];
+
+	var target = "";
+
+	// CHANGE 041228 START
+	// 求職者Noがあればパラメタとして渡す
+	if (frame31.jobseekerNo.value != "") {
+		target = "jobseeker_address_register"
+			   + "?jobseekerNo=" + frame31.jobseekerNo.value
+			   + "&messageNo=" + document.forms[0].messageNo.value;
+		document.forms[0].jobseekerNo.value = frame31.jobseekerNo.value;
+	} else {
+		target = "_blank";
+	}
+	// ORG
+	//// 求職者Noがあればパラメタとして渡す
+	//if (frame31.jobseekerNo.value != "" &&
+	//		frame31.jobseekerNo.value != "0000000") {
+	//	target = "jobseeker_address_register"
+	//		   + "?jobseekerNo=" + frame31.jobseekerNo.value
+	//		   + "&messageNo=" + document.forms[0].messageNo.value;
+	//	document.forms[0].jobseekerNo.value = frame31.jobseekerNo.value;
+	//} else {
+	//	target = "_blank";
+	//}
+	// CHANGE 041228 END
+
+	document.forms[0].action = "jobseeker_address_register_view";
+	document.forms[0].target = target;
+	document.forms[0].submit();
+
+	return;
+}
+
+// -->
+</script>
+</head>
+<body marginwidth="2" marginheight="2">
+
+<form name="messageMailOperationForm" method="post" action="/webcalib/app/message_management331_view?CLB31A" id="messageMailOperationForm">
+<input type="hidden" name="sn" value="5ab8cfacb38ac52b85030d5e5e38d956" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.MessageMailOperationForm.memoChangeButton" value="3" style="">
+<input type="hidden" name="DISPLAY_MODE.jp.co.ablic.webcalib.web.mail.MessageMailOperationForm.memo" value="3" style="">
+<input type="hidden" name="updateCheckFlag" value="false" style="">
+<input type="hidden" name="flag" value="" style="">
+
+
+
+<input type="hidden" name="complete" value="true" style=""></form>
+
+
+
+
+<script language="JavaScript">
+
+
+</script>
+
+
+
+
+</body></html>
