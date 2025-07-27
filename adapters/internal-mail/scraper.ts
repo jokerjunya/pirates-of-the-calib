@@ -41,11 +41,17 @@ export class WebCalibScraper {
     
     try {
       // ログインページURLを構築
-      const fullLoginUrl = this.config.loginUrl.startsWith('http') 
-        ? this.config.loginUrl 
-        : `${this.config.baseUrl}${this.config.loginUrl}`;
+      let fullLoginUrl: string;
+      if (this.config.loginUrl.startsWith('http')) {
+        fullLoginUrl = this.config.loginUrl;
+      } else {
+        // baseURLの末尾のスラッシュとloginURLの先頭のスラッシュを正規化
+        const cleanBaseUrl = this.config.baseUrl.replace(/\/+$/, '');
+        const cleanLoginUrl = this.config.loginUrl.replace(/^\/+/, '');
+        fullLoginUrl = `${cleanBaseUrl}/${cleanLoginUrl}`;
+      }
       
-      console.log(`🌐 アクセス中: ${fullLoginUrl}`);
+      console.log(`🌐 ログインページアクセス中: ${fullLoginUrl}`);
       
       // ログインページにアクセス
       await this.page.goto(fullLoginUrl);
@@ -64,6 +70,120 @@ export class WebCalibScraper {
       
     } catch (error) {
       console.error('❌ ログインエラー:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * e-mail検索を実行してメッセージ管理ページに遷移
+   */
+  async navigateToMessageManagement(): Promise<void> {
+    if (!this.page) throw new Error('Page not initialized');
+    
+    console.log('🔍 e-mail検索を実行中...');
+    
+    try {
+      // 1. e-mail検索ページに遷移
+      const searchPageUrl = `${this.config.baseUrl.replace(/\/+$/, '')}/webcalib/app/jobseeker_management_view`;
+      console.log(`🌐 e-mail検索ページアクセス中: ${searchPageUrl}`);
+      
+      await this.page.goto(searchPageUrl);
+      await this.page.waitForLoadState('networkidle');
+      
+      // 2. e-mailアドレスを入力（設定から取得、またはデフォルト）
+      const targetEmail = this.config.targetEmail || 'yuya_inagaki+005@r.recruit.co.jp';
+      console.log(`📧 検索対象e-mail: ${targetEmail}`);
+      
+      // e-mail入力欄を探して入力
+      const emailInputSelectors = [
+        'input[name="email"]',
+        'input[name="e-mail"]',
+        'input[name="emailAddress"]',
+        'input[type="email"]',
+        'input[placeholder*="mail"]',
+        'input[placeholder*="メール"]'
+      ];
+      
+      let emailInputFound = false;
+      for (const selector of emailInputSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 2000 });
+          await this.page.fill(selector, targetEmail);
+          emailInputFound = true;
+          console.log(`✅ e-mail入力完了: ${selector}`);
+          break;
+        } catch {
+          continue;
+        }
+      }
+      
+      if (!emailInputFound) {
+        throw new Error('e-mail入力欄が見つかりませんでした');
+      }
+      
+      // 3. 検索ボタンをクリック
+      const searchButtonSelectors = [
+        'input[name="search"]',
+        'input[value="検索"]',
+        'button:has-text("検索")',
+        'input[type="submit"]',
+        '.search-button',
+        '#searchButton'
+      ];
+      
+      let searchButtonFound = false;
+      for (const selector of searchButtonSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 2000 });
+          await this.page.click(selector);
+          searchButtonFound = true;
+          console.log(`✅ 検索ボタンクリック完了: ${selector}`);
+          break;
+        } catch {
+          continue;
+        }
+      }
+      
+      if (!searchButtonFound) {
+        throw new Error('検索ボタンが見つかりませんでした');
+      }
+      
+      await this.page.waitForLoadState('networkidle');
+      
+      // 4. メッセージ管理ボタンをクリック
+      console.log('🔘 メッセージ管理ボタンを探しています...');
+      
+      const messageManagementSelectors = [
+        'button:has-text("メッセージ管理")',
+        'input[value="メッセージ管理"]',
+        'a:has-text("メッセージ管理")',
+        'input[name="messageManagement"]',
+        '.message-management',
+        '#messageManagement'
+      ];
+      
+      let managementButtonFound = false;
+      for (const selector of messageManagementSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 3000 });
+          await this.page.click(selector);
+          managementButtonFound = true;
+          console.log(`✅ メッセージ管理ボタンクリック完了: ${selector}`);
+          break;
+        } catch {
+          continue;
+        }
+      }
+      
+      if (!managementButtonFound) {
+        throw new Error('メッセージ管理ボタンが見つかりませんでした');
+      }
+      
+      await this.page.waitForLoadState('networkidle');
+      console.log('🎉 メッセージ管理ページに到達しました');
+      
+    } catch (error) {
+      console.error('❌ メッセージ管理ページへの遷移エラー:', error);
       throw error;
     }
   }
@@ -173,6 +293,9 @@ export class WebCalibScraper {
     
     try {
       await this.initialize();
+      
+      // 新しいフロー: ログイン → e-mail検索 → メッセージ管理 → メール一覧
+      await this.navigateToMessageManagement();
       
       const mailList = await this.fetchMailList();
       result.totalMails = mailList.length;

@@ -41,6 +41,7 @@ export default function SyncDashboard() {
     baseUrl: '',
     username: '',
     password: '',
+    targetEmail: '',
     jobseekerNo: '',
     headless: true
   });
@@ -58,8 +59,8 @@ export default function SyncDashboard() {
 
   // 同期実行
   const handleSync = async () => {
-    if (!config.baseUrl || !config.username || !config.password) {
-      alert('必要な設定項目を入力してください');
+    if (!config.baseUrl || !config.username || !config.password || !config.targetEmail) {
+      alert('必要な設定項目（Base URL、ユーザー名、パスワード、検索対象e-mail）を入力してください');
       return;
     }
 
@@ -84,10 +85,11 @@ export default function SyncDashboard() {
           mode: 'scrape',
           scraperConfig: {
             baseUrl: config.baseUrl,
-            loginUrl: '/webcalib/app/login?CLB31A',
+            loginUrl: '/webcalib/app/logout?sn=21f10a00b9a7d4f4836e5f6077a672af&CLB31A',
             listUrl: '/webcalib/app/message_management33_list',
             username: config.username,
             password: config.password,
+            targetEmail: config.targetEmail,
             jobseekerNo: config.jobseekerNo || undefined,
             headless: config.headless,
             timeout: 60000
@@ -186,6 +188,19 @@ export default function SyncDashboard() {
                     type="password"
                     value={config.password}
                     onChange={(e) => setConfig({...config, password: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    検索対象e-mail *
+                  </label>
+                  <input
+                    type="email"
+                    value={config.targetEmail}
+                    onChange={(e) => setConfig({...config, targetEmail: e.target.value})}
+                    placeholder="yuya_inagaki+005@r.recruit.co.jp"
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -343,8 +358,9 @@ export default function SyncDashboard() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-6">
             <h3 className="text-md font-semibold text-blue-900 mb-2">💡 使用ガイド</h3>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Web-CALIBの接続情報を入力してください</li>
-              <li>• 「同期開始」ボタンで Web-CALIB からメールを取得します</li>
+              <li>• Base URL: <code className="bg-blue-100 px-1 rounded">https://rt-calib.r-agent.com</code></li>
+              <li>• 検索対象e-mail: スクレイピング対象のユーザーのe-mailアドレス</li>
+              <li>• 「同期開始」ボタンで自動的に検索→メッセージ管理→メール取得を実行</li>
               <li>• 取得したメールは自動的に ca-support2 システムに取り込まれます</li>
               <li>• CLI コマンド: <code className="bg-blue-100 px-1 rounded">pnpm sync:internal</code></li>
             </ul>
