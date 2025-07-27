@@ -324,6 +324,55 @@ export class WebCalibScraper {
       
       await this.page.waitForLoadState('networkidle');
       
+      // 🔍 jobseekerNoを正しく取得
+      try {
+        const jobseekerNoFromPage = await this.page.evaluate(() => {
+          // URLパラメータから取得
+          const urlParams = new URLSearchParams(window.location.search);
+          const fromUrl = urlParams.get('jobseekerNo');
+          if (fromUrl) return fromUrl;
+          
+          // ページ内のテキストから取得（J025870形式）
+          const pageText = document.body.innerText;
+          const match = pageText.match(/J\d{6}/);
+          if (match) return match[0];
+          
+          // フォーム要素から取得
+          const inputs = document.querySelectorAll('input[name*="jobseeker"], input[value*="J0"]');
+          for (const input of inputs) {
+            const value = (input as HTMLInputElement).value;
+            if (value && value.match(/J\d{6}/)) return value;
+          }
+          
+          // リンクのhrefから取得
+          const links = document.querySelectorAll('a[href*="jobseekerNo="]');
+          for (const link of links) {
+            const href = (link as HTMLAnchorElement).href;
+            const match = href.match(/jobseekerNo=([^&]+)/);
+            if (match) return match[1];
+          }
+          
+          return null;
+        });
+        
+        if (jobseekerNoFromPage) {
+          console.log(`🎯 jobseekerNo取得成功: ${jobseekerNoFromPage}`);
+          // configを更新
+          this.config.jobseekerNo = jobseekerNoFromPage;
+        } else {
+          console.log('⚠️ jobseekerNoが取得できませんでした - ページから手動で確認が必要');
+          // ページの詳細情報を出力してデバッグ
+          const pageInfo = await this.page.evaluate(() => ({
+            url: window.location.href,
+            title: document.title,
+            bodyText: document.body.innerText.substring(0, 500)
+          }));
+          console.log('📄 デバッグ情報:', pageInfo);
+        }
+      } catch (error) {
+        console.log('⚠️ jobseekerNo取得エラー:', error);
+      }
+      
       // 4. メッセージ管理ボタンを探して詳細調査
       console.log('🔘 メッセージ管理ボタンを探しています...');
       
@@ -385,15 +434,44 @@ export class WebCalibScraper {
           managementButtonFound = true;
           console.log(`✅ メッセージ管理ボタンクリック完了: ${selector}`);
           
-          // クリック後のURL変化を確認
-          await this.page.waitForTimeout(2000); // 2秒待機
-          const afterUrl = this.page.url();
-          console.log(`🔍 クリック後URL: ${afterUrl}`);
+          // JavaScriptの実行とページ遷移を待機
+          console.log('⏳ JavaScript実行とページ遷移を待機中...');
           
-          if (beforeUrl === afterUrl) {
-            console.log('⚠️ URLが変化していません - ページ遷移が発生していない可能性');
-          } else {
-            console.log('✅ URL変化を確認 - ページ遷移成功');
+          // より長い待機時間でページ変化を監視
+          let urlChanged = false;
+          for (let i = 0; i < 10; i++) { // 10秒間監視
+            await this.page.waitForTimeout(1000);
+            const currentUrl = this.page.url();
+            const currentTitle = await this.page.title();
+            
+            console.log(`⏱️  ${i + 1}秒後: URL="${currentUrl}" タイトル="${currentTitle}"`);
+            
+            if (currentUrl !== beforeUrl) {
+              console.log('✅ URL変化を確認 - ページ遷移成功');
+              urlChanged = true;
+              break;
+            }
+            
+            // フレーム変化も監視
+            const frames = await this.page.frames();
+            if (frames.length > 1) {
+              console.log(`📦 フレーム数変化を検出: ${frames.length}個`);
+              for (let j = 0; j < frames.length; j++) {
+                try {
+                  const frameUrl = frames[j].url();
+                  const frameTitle = await frames[j].title();
+                  console.log(`   フレーム${j}: "${frameTitle}" - ${frameUrl}`);
+                } catch (e) {
+                  console.log(`   フレーム${j}: アクセス不可`);
+                }
+              }
+            }
+          }
+          
+          const afterUrl = this.page.url();
+          if (!urlChanged && beforeUrl === afterUrl) {
+            console.log('⚠️ 10秒待機後もURLが変化していません');
+            console.log('💡 フレーム内でページ変化が発生している可能性があります');
           }
           
           break;
@@ -490,20 +568,93 @@ export class WebCalibScraper {
             const hasInterview = frameContent.includes('面接');
             const hasMail = frameContent.includes('メール');
             
-            if (hasCS || hasInterview) {
-              console.log(`🎯 フレーム${i}にメール関連コンテンツを発見！ CS通達:${hasCS} 面接:${hasInterview} メール:${hasMail}`);
-              
-              // このフレームのHTMLを保存
-              const fs = require('fs');
-              fs.writeFileSync(`debug-frame-${i}.html`, frameContent, 'utf8');
-              console.log(`📄 フレーム${i}のHTML保存: debug-frame-${i}.html`);
-            }
+                         if (hasCS || hasInterview || hasMail) {
+               console.log(`🎯 フレーム${i}にメール関連コンテンツを発見！ CS通達:${hasCS} 面接:${hasInterview} メール:${hasMail}`);
+               
+               // このフレームのHTMLを保存
+               const fs = require('fs');
+               fs.writeFileSync(`debug-frame-${i}.html`, frameContent, 'utf8');
+               console.log(`📄 フレーム${i}のHTML保存: debug-frame-${i}.html`);
+               
+               // フレーム内でメール一覧を直接探してみる
+               try {
+                 const frameMailList = await frame.$$eval('table tr, .list2 tr, div[class*="mail"], a[href*="message"]', links =>
+                   links.map(link => ({
+                     tag: link.tagName,
+                     text: link.textContent?.trim() || '',
+                     href: (link as HTMLAnchorElement).href || '',
+                     className: link.className || ''
+                   })).filter(link => 
+                     (link.text.includes('CS通達') || 
+                      link.text.includes('面接') || 
+                      link.href.includes('message_management33_view')) &&
+                     link.text.length > 0
+                   )
+                 );
+                 
+                 if (frameMailList.length > 0) {
+                   console.log(`🎯 フレーム${i}内でメール一覧発見！`);
+                   frameMailList.forEach((mail, j) => {
+                     console.log(`   ${j + 1}. "${mail.text}" - ${mail.href}`);
+                   });
+                   
+                   // フレーム内のメール一覧で実際にメールが見つかった場合、このフレームで作業を続行
+                   if (frameMailList.some(mail => mail.text.includes('CS通達') || mail.text.includes('面接'))) {
+                     console.log(`🎯 フレーム${i}で実際のメール一覧を発見！このフレームを使用します`);
+                     // このフレームでメール取得作業を継続するためのフラグ
+                     (this as any).targetFrame = frame;
+                   }
+                 }
+               } catch (frameMailError) {
+                 console.log(`⚠️ フレーム${i}のメール一覧探索エラー:`, frameMailError.message);
+               }
+             }
           } catch (frameError) {
             console.log(`⚠️ フレーム${i}の調査エラー:`, frameError.message);
           }
         }
       } catch (error) {
         console.log('⚠️ フレーム調査エラー:', error);
+      }
+      
+      // 🚀 直接メール一覧ページアクセスを試行
+      try {
+        console.log('🔍 直接メール一覧ページアクセスを試行中...');
+        
+        // 可能性のあるメール一覧URL
+        const possibleMailUrls = [
+          `${this.config.baseUrl}/webcalib/app/message_management_view?jobseekerNo=${this.config.jobseekerNo}`,
+          `${this.config.baseUrl}/webcalib/app/message_management33_list?jobseekerNo=${this.config.jobseekerNo}`,
+          `${this.config.baseUrl}/webcalib/app/message_list?jobseekerNo=${this.config.jobseekerNo}`,
+          `${this.config.baseUrl}/webcalib/app/mail_list?jobseekerNo=${this.config.jobseekerNo}`
+        ];
+        
+        for (const mailUrl of possibleMailUrls) {
+          try {
+            console.log(`🌐 試行URL: ${mailUrl}`);
+            await this.page.goto(mailUrl);
+            await this.page.waitForLoadState('networkidle');
+            
+            const pageTitle = await this.page.title();
+            const pageContent = await this.page.content();
+            const hasCS = pageContent.includes('CS通達');
+            const hasInterview = pageContent.includes('面接');
+            
+            console.log(`📄 結果 - タイトル: "${pageTitle}" CS通達:${hasCS} 面接:${hasInterview}`);
+            
+            if (hasCS || hasInterview) {
+              console.log(`🎯 メール一覧ページ発見！ URL: ${mailUrl}`);
+              const fs = require('fs');
+              fs.writeFileSync('debug-direct-maillist.html', pageContent, 'utf8');
+              console.log('📄 直接アクセス成功のHTML保存: debug-direct-maillist.html');
+              break;
+            }
+          } catch (directError) {
+            console.log(`⚠️ 直接アクセス失敗: ${mailUrl} - ${directError.message}`);
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ 直接アクセス試行エラー:', error);
       }
       
       // 🚀 完全ページHTML取得・保存
