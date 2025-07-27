@@ -590,7 +590,12 @@ export class WebCalibScraper {
     
     // targetFrameが設定されている場合、そのフレームを使用
     const targetFrame = (this as any).targetFrame;
+    console.log('🔍 targetFrame設定状況:', targetFrame ? 'あり' : 'なし');
     if (targetFrame) {
+      console.log('🔍 targetFrame詳細:', {
+        url: targetFrame.url ? targetFrame.url() : '不明',
+        type: typeof targetFrame
+      });
       console.log('🎯 発見されたtargetFrameを使用してメール一覧を取得中...');
       try {
         const frameUrl = targetFrame.url();
@@ -682,8 +687,15 @@ export class WebCalibScraper {
                    });
                    
                    // フレーム内のメール一覧で実際にメールが見つかった場合、このフレームで作業を続行
-                   if (frameMailList.some(mail => mail.text.includes('CS通達') || mail.text.includes('面接'))) {
+                   if (frameMailList.some(mail => 
+                     mail.text.includes('CS通達') || 
+                     mail.text.includes('CS希望') || 
+                     mail.text.includes('面接') || 
+                     mail.text.includes('面談') || 
+                     mail.text.includes('メール') ||
+                     mail.href.includes('message_management33_view'))) {
                      console.log(`🎯 フレーム${i}で実際のメール一覧を発見！このフレームを使用します`);
+                     console.log(`🎯 マッチしたメール数: ${frameMailList.length}件`);
                      // このフレームでメール取得作業を継続するためのフラグ
                      (this as any).targetFrame = frame;
                    }
