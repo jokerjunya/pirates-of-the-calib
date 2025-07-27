@@ -233,6 +233,17 @@ export class WebCalibScraper {
       
     } catch (error) {
       console.error('❌ ログインエラー:', error);
+      
+      // エラー時でもスクリーンショットを保存
+      try {
+        if (this.page) {
+          await this.page.screenshot({ path: 'debug-login-error.png', fullPage: true });
+          console.log('📸 エラー時スクリーンショット保存: debug-login-error.png');
+        }
+      } catch (screenshotError) {
+        console.log('⚠️ エラー時スクリーンショット保存失敗:', screenshotError);
+      }
+      
       throw error;
     }
   }
@@ -374,34 +385,218 @@ export class WebCalibScraper {
       await this.page.goto(listUrl);
       await this.page.waitForLoadState('networkidle');
       
-      // メール一覧テーブルから情報を抽出
+      // デバッグ: メール一覧ページの構造を詳しく調べる
+      console.log('🔍 メール一覧ページの構造を調査中...');
+      
+      // スクリーンショット保存
+      try {
+        await this.page.screenshot({ path: 'debug-maillist-page.png', fullPage: true });
+        console.log('📸 メール一覧スクリーンショット保存: debug-maillist-page.png');
+      } catch (error) {
+        console.log('⚠️ スクリーンショット保存失敗:', error);
+      }
+      
+      // ページタイトル確認
+      const pageTitle = await this.page.title();
+      console.log('📄 メール一覧ページタイトル:', pageTitle);
+      
+      // テーブル要素を全て探す
+      try {
+        const allTables = await this.page.$$eval('table', tables => 
+          tables.map((table, index) => ({
+            index,
+            id: table.id,
+            className: table.className,
+            rowCount: table.querySelectorAll('tr').length,
+            cellContent: Array.from(table.querySelectorAll('td')).slice(0, 5).map(td => td.textContent?.trim().substring(0, 50))
+          }))
+        );
+        console.log('📊 見つかったテーブル:', JSON.stringify(allTables, null, 2));
+      } catch (error) {
+        console.log('⚠️ テーブル解析エラー:', error);
+      }
+      
+      // リンク要素を探す
+      try {
+        const allLinks = await this.page.$$eval('a', links => 
+          links.map(link => ({
+            href: link.href,
+            text: link.textContent?.trim(),
+            className: link.className
+          })).filter(link => 
+            link.href.includes('message_management') || 
+            link.text?.length > 0
+          ).slice(0, 10)
+        );
+        console.log('🔗 見つかったリンク:', JSON.stringify(allLinks, null, 2));
+      } catch (error) {
+        console.log('⚠️ リンク解析エラー:', error);
+      }
+      
+      // div要素の調査（テーブル以外の可能性）
+      try {
+        const allDivs = await this.page.$$eval('div', divs => 
+          divs.map((div, index) => ({
+            index,
+            id: div.id,
+            className: div.className,
+            textContent: div.textContent?.trim().substring(0, 100)
+          })).filter(div => 
+            div.textContent && div.textContent.length > 10
+          ).slice(0, 10)
+        );
+        console.log('📦 主要なdiv要素:', JSON.stringify(allDivs, null, 2));
+      } catch (error) {
+        console.log('⚠️ div解析エラー:', error);
+      }
+      
+      // メール一覧テーブルから情報を抽出（複数パターンに対応）
       const mailList = await this.page.evaluate(() => {
-        const table = document.querySelector('table.list2');
-        if (!table) return [];
+        console.log('🔍 JavaScript側でメール一覧を検索中...');
         
-        const rows = Array.from(table.querySelectorAll('tr')).slice(1); // ヘッダー行をスキップ
+        // パターン1: table.list2（元のパターン）
+        let table = document.querySelector('table.list2');
+        console.log('📊 table.list2の結果:', table ? 'あり' : 'なし');
         
-        return rows.map(row => {
-          const cells = row.querySelectorAll('td');
-          if (cells.length < 3) return null;
+        // パターン2: 他のテーブルクラス
+        if (!table) {
+          const tableSelectors = ['table.list', 'table', '.list2', '.list'];
+          for (const selector of tableSelectors) {
+            table = document.querySelector(selector);
+            if (table) {
+              console.log(`📊 ${selector}で見つかりました`);
+              break;
+            }
+          }
+        }
+        
+        // パターン3: div要素によるリスト
+        if (!table) {
+          console.log('📊 テーブルが見つからないため、div要素を探します');
+          const divContainers = document.querySelectorAll('div');
+          for (const div of divContainers) {
+            const links = div.querySelectorAll('a[href*="message_management33_view"]');
+            if (links.length > 0) {
+              console.log('📊 div内にメールリンクを発見');
+              const results = Array.from(links).map(link => ({
+                subject: link.textContent?.trim() || 'タイトル不明',
+                href: link.getAttribute('href') || '',
+                date: link.closest('tr')?.querySelector('td')?.textContent?.trim() || 
+                      link.parentElement?.textContent?.match(/\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}/)?.[0] || '日付不明'
+              }));
+              return results;
+            }
+          }
+        }
+        
+        if (!table) {
+          console.log('❌ テーブルまたはメールリストが見つかりませんでした');
           
-          const linkElement = cells[1]?.querySelector('a[href*="message_management33_view"]');
-          if (!linkElement) return null;
+          // 最後の手段：全てのリンクからメール関連を探す
+          const allLinks = document.querySelectorAll('a');
+          const mailLinks = Array.from(allLinks).filter(link => 
+            link.href.includes('message_management33_view') || 
+            link.href.includes('message_management') ||
+            link.textContent?.includes('件名') ||
+            link.textContent?.includes('メール')
+          );
+          
+          console.log(`🔗 全リンクから${mailLinks.length}件のメール関連リンクを発見`);
+          
+          if (mailLinks.length > 0) {
+            return mailLinks.map(link => ({
+              subject: link.textContent?.trim() || 'リンクタイトル不明',
+              href: link.getAttribute('href') || '',
+              date: 'リンクから日付取得不可'
+            }));
+          }
+          
+          return [];
+        }
+        
+        console.log('📊 テーブルが見つかりました、行を解析中...');
+        const rows = Array.from(table.querySelectorAll('tr'));
+        console.log(`📊 ${rows.length}行見つかりました`);
+        
+        // ヘッダー行を判定してスキップ
+        const dataRows = rows.filter((row, index) => {
+          const text = row.textContent?.toLowerCase();
+          const isHeader = text?.includes('件名') || text?.includes('日付') || 
+                          text?.includes('subject') || text?.includes('date') ||
+                          index === 0; // 最初の行もヘッダーとして扱う
+          return !isHeader;
+        });
+        
+        console.log(`📊 データ行: ${dataRows.length}行`);
+        
+        return dataRows.map((row, index) => {
+          const cells = row.querySelectorAll('td, th');
+          console.log(`📊 行${index}: ${cells.length}セル`);
+          
+          if (cells.length === 0) return null;
+          
+          // リンク要素を探す（複数パターン）
+          const linkSelectors = [
+            'a[href*="message_management33_view"]',
+            'a[href*="message_management"]',
+            'a[href*="view"]',
+            'a'
+          ];
+          
+          let linkElement = null;
+          for (const selector of linkSelectors) {
+            linkElement = row.querySelector(selector);
+            if (linkElement) break;
+          }
+          
+          if (!linkElement) {
+            console.log(`📊 行${index}: リンクが見つかりません`);
+            return null;
+          }
+          
+          console.log(`📊 行${index}: リンク発見 - ${linkElement.textContent?.trim()}`);
           
           return {
-            subject: linkElement.textContent?.trim() || '',
+            subject: linkElement.textContent?.trim() || 'タイトル不明',
             href: linkElement.getAttribute('href') || '',
-            date: cells[0]?.textContent?.trim() || ''
+            date: cells[0]?.textContent?.trim() || 
+                  Array.from(cells).find(cell => 
+                    cell.textContent?.match(/\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}/)
+                  )?.textContent?.trim() || '日付不明'
           };
         }).filter(Boolean);
       });
       
       console.log(`📧 ${mailList.length}件のメールを発見`);
+      
+      // 各メールの情報を詳しくログ出力
+      if (mailList.length > 0) {
+        console.log('📋 発見されたメール一覧:');
+        mailList.forEach((mail, index) => {
+          console.log(`  ${index + 1}. 件名: "${mail.subject}" | 日付: "${mail.date}" | URL: "${mail.href}"`);
+        });
+      } else {
+        console.log('⚠️ メールが0件でした。ページ構造を確認してください。');
+      }
+      
       return mailList as Array<{subject: string, href: string, date: string}>;
       
     } catch (error) {
       console.error('❌ メール一覧取得エラー:', error);
-      throw error;
+      
+      // エラー時でもスクリーンショットを保存
+      try {
+        if (this.page) {
+          await this.page.screenshot({ path: 'debug-maillist-error.png', fullPage: true });
+          console.log('📸 メール一覧エラー時スクリーンショット保存: debug-maillist-error.png');
+        }
+      } catch (screenshotError) {
+        console.log('⚠️ エラー時スクリーンショット保存失敗:', screenshotError);
+      }
+      
+      // エラー時でも空配列を返して処理を続行
+      console.log('🔄 エラーが発生しましたが、処理を続行します');
+      return [];
     }
   }
 
