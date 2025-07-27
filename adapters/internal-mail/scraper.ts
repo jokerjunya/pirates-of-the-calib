@@ -418,6 +418,43 @@ export class WebCalibScraper {
         console.log('⚠️ スクリーンショット保存失敗:', error);
       }
       
+      // 🚀 完全ページHTML取得・保存
+      try {
+        const fullHTML = await this.page.content();
+        const fs = require('fs');
+        fs.writeFileSync('debug-maillist-full.html', fullHTML, 'utf8');
+        console.log('📄 完全HTML保存: debug-maillist-full.html (ファイルを開いて実際の構造を確認可能)');
+        
+        // HTMLの重要な部分を抽出して表示
+        const htmlPreview = fullHTML.substring(0, 2000);
+        console.log('📄 HTML先頭2000文字:', htmlPreview);
+        
+        // 「CS通達」「面接」「メール」キーワード周辺のHTML抽出
+        const keywordPattern = /(CS通達|面接|メール|message)/gi;
+        const matches = [];
+        let match;
+        while ((match = keywordPattern.exec(fullHTML)) !== null) {
+          const start = Math.max(0, match.index - 200);
+          const end = Math.min(fullHTML.length, match.index + 200);
+          const context = fullHTML.substring(start, end);
+          matches.push({
+            keyword: match[0],
+            position: match.index,
+            context: context.replace(/\s+/g, ' ')
+          });
+          if (matches.length >= 10) break; // 最初の10件まで
+        }
+        
+        console.log('🔍 キーワード「CS通達/面接/メール」周辺のHTML:');
+        matches.forEach((m, i) => {
+          console.log(`  ${i + 1}. "${m.keyword}" (位置: ${m.position})`);
+          console.log(`     文脈: "${m.context.substring(0, 150)}..."`);
+        });
+        
+      } catch (error) {
+        console.log('⚠️ 完全HTML取得エラー:', error);
+      }
+      
       // ページタイトル確認
       const pageTitle = await this.page.title();
       console.log('📄 メール一覧ページタイトル:', pageTitle);
@@ -488,180 +525,15 @@ export class WebCalibScraper {
         console.log('⚠️ div解析エラー:', error);
       }
       
-      // メール一覧テーブルから情報を抽出（複数パターンに対応）
-      const mailList = await this.page.evaluate(() => {
-        console.log('🔍 JavaScript側でメール一覧を検索中...');
-        
-        // まず、現在のページ内の全てのテーブルを詳しく調査
-        const allTables = document.querySelectorAll('table');
-        console.log(`📊 ページ内の全テーブル数: ${allTables.length}`);
-        
-        // 各テーブルを詳しく調査してメール一覧テーブルを特定
-        let table = null;
-        let tableFound = false;
-        
-        for (let i = 0; i < allTables.length; i++) {
-          const currentTable = allTables[i];
-          const rows = currentTable.querySelectorAll('tr');
-          const firstRowText = rows[0]?.textContent?.trim() || '';
-          const hasMailLinks = currentTable.querySelectorAll('a[href*="CS通達"], a[href*="message"], a[href*="メール"]').length > 0;
-          
-          console.log(`📊 テーブル${i}: ${currentTable.className || '(クラス名なし)'}`);
-          console.log(`    - 行数: ${rows.length}`);
-          console.log(`    - 最初の行: "${firstRowText.substring(0, 50)}..."`);
-          console.log(`    - メール系リンク数: ${hasMailLinks}`);
-          
-          // メール一覧テーブルの特徴：
-          // 1. 複数の行がある
-          // 2. CS通達、面接、メールなどのキーワードを含むリンクがある
-          // 3. 求職者管理テーブルではない
-          if (rows.length > 5 && hasMailLinks && !firstRowText.includes('イナガキ') && !firstRowText.includes('稲垣')) {
-            console.log(`🎯 メール一覧テーブル発見: テーブル${i}`);
-            table = currentTable;
-            tableFound = true;
-            break;
-          }
-        }
-        
-        if (!tableFound) {
-          console.log('⚠️ 明確なメール一覧テーブルが見つからないため、全テーブルからメール系リンクを探索');
-          
-          // すべてのテーブルからメール系リンクを収集
-          const allMailLinks = [];
-          allTables.forEach((tbl, index) => {
-            const mailLinks = tbl.querySelectorAll('a');
-            mailLinks.forEach(link => {
-              const href = link.getAttribute('href') || '';
-              const text = link.textContent?.trim() || '';
-              if ((href.includes('CS通達') || href.includes('message') || href.includes('面接') || 
-                   text.includes('CS通達') || text.includes('面接') || text.includes('決算')) &&
-                  !text.includes('稲垣') && !text.includes('イナガキ')) {
-                console.log(`🔗 メール系リンク発見 (テーブル${index}): "${text}" → ${href}`);
-                allMailLinks.push({
-                  subject: text,
-                  href: href,
-                  date: link.closest('tr')?.querySelector('td')?.textContent?.trim() || '不明'
-                });
-              }
-            });
-          });
-          
-          if (allMailLinks.length > 0) {
-            console.log(`📧 全テーブル探索で${allMailLinks.length}件のメールリンクを発見`);
-            return allMailLinks;
-          }
-        }
-        
-        // メール一覧テーブルが特定できなかった場合の処理
-        if (!tableFound) {
-          console.log('❌ メール一覧テーブルが特定できませんでした');
-          return [];
-        }
-        
-        console.log('📊 テーブルが見つかりました、行を解析中...');
-        const rows = Array.from(table.querySelectorAll('tr'));
-        console.log(`📊 ${rows.length}行見つかりました`);
-        
-        // ヘッダー行を判定してスキップ（強化版）
-        const dataRows = rows.filter((row, index) => {
-          const text = row.textContent?.toLowerCase();
-          const rowHTML = row.innerHTML?.toLowerCase();
-          
-          // 明確なヘッダー行判定
-          const isHeader = text?.includes('件名') || text?.includes('日付') || 
-                          text?.includes('subject') || text?.includes('date') ||
-                          text?.includes('カナ氏名') || text?.includes('氏名') ||
-                          text?.includes('▼') || text?.includes('▲') ||           // ソートボタン
-                          text?.includes('所属') || text?.includes('担当') ||
-                          rowHTML?.includes('href="#"') ||                         // 無効なリンク
-                          index === 0; // 最初の行もヘッダーとして扱う
-          
-          if (isHeader) {
-            console.log(`📊 ヘッダー行をスキップ: "${text?.substring(0, 50)}..."`);
-          }
-          
-          return !isHeader;
-        });
-        
-        console.log(`📊 データ行: ${dataRows.length}行`);
-        
-        return dataRows.map((row, index) => {
-          const cells = row.querySelectorAll('td, th');
-          console.log(`📊 行${index}: ${cells.length}セル`);
-          
-          if (cells.length === 0) return null;
-          
-          // リンク要素を探す（複数パターン）
-          const linkSelectors = [
-            'a[href*="message_management33_view"]',
-            'a[href*="message_management"]',
-            'a[href*="view"]',
-            'a'
-          ];
-          
-          let linkElement = null;
-          let usedSelector = null;
-          for (const selector of linkSelectors) {
-            linkElement = row.querySelector(selector);
-            if (linkElement) {
-              usedSelector = selector;
-              break;
-            }
-          }
-          
-          if (!linkElement) {
-            console.log(`📊 行${index}: リンクが見つかりません`);
-            return null;
-          }
-          
-          const linkText = linkElement.textContent?.trim() || 'タイトル不明';
-          const linkHref = linkElement.getAttribute('href') || '';
-          
-          // 無効なリンクを除外
-          if (linkHref === '#' || linkHref === '' || 
-              linkText === '▼' || linkText === '▲' ||
-              linkText.includes('▼') || linkText.includes('▲')) {
-            console.log(`📊 行${index}: 無効なリンクをスキップ - "${linkText}" (${linkHref})`);
-            return null;
-          }
-          
-          // メール関連のリンクかチェック
-          const isMailLink = linkHref.includes('message_management') || 
-                            linkHref.includes('mail') || 
-                            linkHref.includes('メール') ||
-                            (linkText.length > 3 && !linkText.includes('カナ') && !linkText.includes('氏名'));
-          
-          if (!isMailLink) {
-            console.log(`📊 行${index}: メール以外のリンクをスキップ - "${linkText}"`);
-            return null;
-          }
-          
-          console.log(`📊 行${index}: ✅ 有効なメールリンク発見 - "${linkText}" (${usedSelector})`);
-          console.log(`📊 行${index}: URL - ${linkHref}`);
-          
-          // 日付抽出の改善
-          let dateText = '日付不明';
-          
-          // 最初のセルが日付の可能性
-          if (cells[0]?.textContent?.trim()) {
-            dateText = cells[0].textContent.trim();
-          } else {
-            // 日付パターンを探す
-            const dateCell = Array.from(cells).find(cell => 
-              cell.textContent?.match(/\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}/)
-            );
-            if (dateCell) {
-              dateText = dateCell.textContent.trim();
-            }
-          }
-          
-          return {
-            subject: linkText,
-            href: linkHref,
-            date: dateText
-          };
-        }).filter(Boolean);
-      });
+      // 🚨 一時的にメール取得を無効化 - 完全ページ解析モード
+      console.log('🚨 メール取得ロジックを一時無効化 - 完全ページ解析を優先');
+      console.log('📋 現在は以下のファイルで実際のメール位置を特定してください:');
+      console.log('   1. debug-maillist-page.png (スクリーンショット)');
+      console.log('   2. debug-maillist-full.html (完全HTML)');
+      console.log('   3. 上記のキーワード周辺HTML情報');
+      
+      // 空の配列を返して、完全ページ解析に集中
+      const mailList: Array<{subject: string, href: string, date: string}> = [];
       
       console.log(`📧 ${mailList.length}件のメールを発見`);
       
