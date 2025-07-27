@@ -587,10 +587,14 @@ export class WebCalibScraper {
     if (!this.page) throw new Error('Page not initialized');
     
     console.log('📬 メール一覧を取得中...');
+    console.log('🔍 === fetchMailList デバッグ開始 ===');
     
     // targetFrameが設定されている場合、そのフレームを使用
     const targetFrame = (this as any).targetFrame;
     console.log('🔍 targetFrame設定状況:', targetFrame ? 'あり' : 'なし');
+    console.log('🔍 targetFrame値:', targetFrame);
+    console.log('🔍 targetFrame型:', typeof targetFrame);
+    
     if (targetFrame) {
       console.log('🔍 targetFrame詳細:', {
         url: targetFrame.url ? targetFrame.url() : '不明',
@@ -687,17 +691,24 @@ export class WebCalibScraper {
                    });
                    
                    // フレーム内のメール一覧で実際にメールが見つかった場合、このフレームで作業を続行
-                   if (frameMailList.some(mail => 
+                   const hasRealMailLinks = frameMailList.some(mail => 
+                     mail.href.includes('message_management33_view'));
+                   const hasMailKeywords = frameMailList.some(mail => 
                      mail.text.includes('CS通達') || 
                      mail.text.includes('CS希望') || 
                      mail.text.includes('面接') || 
                      mail.text.includes('面談') || 
-                     mail.text.includes('メール') ||
-                     mail.href.includes('message_management33_view'))) {
+                     mail.text.includes('メール'));
+                   
+                   // 実際のメールリンクがあり、かつキーワードがマッチし、かつtargetFrameが未設定の場合のみ設定
+                   if (frameMailList.length > 0 && hasRealMailLinks && hasMailKeywords && !(this as any).targetFrame) {
                      console.log(`🎯 フレーム${i}で実際のメール一覧を発見！このフレームを使用します`);
                      console.log(`🎯 マッチしたメール数: ${frameMailList.length}件`);
+                     console.log(`🎯 実際のメールリンク存在: ${hasRealMailLinks}`);
                      // このフレームでメール取得作業を継続するためのフラグ
                      (this as any).targetFrame = frame;
+                   } else if (frameMailList.length > 0) {
+                     console.log(`⚠️ フレーム${i}でメール発見も条件不一致: メール数=${frameMailList.length}, リンク=${hasRealMailLinks}, キーワード=${hasMailKeywords}, targetFrame既存=${!!(this as any).targetFrame}`);
                    }
                  }
                } catch (frameMailError) {
