@@ -15,11 +15,12 @@ import type { ScraperConfig } from './types';
 // 環境変数から設定を読み込み
 function loadConfigFromEnv(): ScraperConfig {
   const config = {
-    baseUrl: process.env.WEBCALIB_BASE_URL || '',
-    loginUrl: process.env.WEBCALIB_LOGIN_URL || '/webcalib/app/login?CLB31A',
+    baseUrl: process.env.WEBCALIB_BASE_URL || 'https://rt-calib.r-agent.com',
+    loginUrl: process.env.WEBCALIB_LOGIN_URL || '/webcalib/app/logout?sn=21f10a00b9a7d4f4836e5f6077a672af&CLB31A',
     listUrl: process.env.WEBCALIB_LIST_URL || '/webcalib/app/message_management33_list',
     username: process.env.WEBCALIB_USERNAME || '',
     password: process.env.WEBCALIB_PASSWORD || '',
+    targetEmail: process.env.WEBCALIB_TARGET_EMAIL || 'yuya_inagaki+005@r.recruit.co.jp',
     jobseekerNo: process.env.WEBCALIB_JOBSEEKER_NO || undefined,
     headless: process.env.WEBCALIB_HEADLESS !== 'false', // デフォルトはheadless
     timeout: parseInt(process.env.WEBCALIB_TIMEOUT || '30000')
@@ -39,12 +40,13 @@ function showHelp() {
   pnpm sync:internal --config     # 設定例を表示
 
 必要な環境変数:
-  WEBCALIB_BASE_URL     # Web-CALIBのベースURL (必須)
+  WEBCALIB_BASE_URL     # Web-CALIBのベースURL (デフォルト: https://rt-calib.r-agent.com)
   WEBCALIB_USERNAME     # ログインユーザー名 (必須)
   WEBCALIB_PASSWORD     # ログインパスワード (必須)
+  WEBCALIB_TARGET_EMAIL # 検索対象e-mail (デフォルト: yuya_inagaki+005@r.recruit.co.jp)
   
 オプション環境変数:
-  WEBCALIB_LOGIN_URL    # ログインURL (デフォルト: /webcalib/app/login?CLB31A)
+  WEBCALIB_LOGIN_URL    # ログインURL (デフォルト: /webcalib/app/logout?sn=...&CLB31A)
   WEBCALIB_LIST_URL     # メール一覧URL (デフォルト: /webcalib/app/message_management33_list)
   WEBCALIB_JOBSEEKER_NO # 求職者番号 (オプション)
   WEBCALIB_HEADLESS     # ヘッドレスモード (デフォルト: true, false で GUI表示)
@@ -64,11 +66,12 @@ function showConfigExample() {
 📝 .env ファイル設定例:
 
 # Web-CALIB 接続設定
-WEBCALIB_BASE_URL=https://your-webcalib-server.com
+WEBCALIB_BASE_URL=https://rt-calib.r-agent.com
 WEBCALIB_USERNAME=your-username
 WEBCALIB_PASSWORD=your-password
 
 # オプション設定
+WEBCALIB_TARGET_EMAIL=yuya_inagaki+005@r.recruit.co.jp
 WEBCALIB_JOBSEEKER_NO=12345
 WEBCALIB_HEADLESS=true
 WEBCALIB_TIMEOUT=30000

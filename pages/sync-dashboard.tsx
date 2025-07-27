@@ -49,9 +49,10 @@ export default function SyncDashboard() {
   // 設定を環境変数から初期化
   useEffect(() => {
     setConfig({
-      baseUrl: process.env.NEXT_PUBLIC_WEBCALIB_BASE_URL || '',
+      baseUrl: process.env.NEXT_PUBLIC_WEBCALIB_BASE_URL || 'https://rt-calib.r-agent.com',
       username: process.env.NEXT_PUBLIC_WEBCALIB_USERNAME || '',
       password: '', // セキュリティ上、パスワードは毎回入力
+      targetEmail: process.env.NEXT_PUBLIC_WEBCALIB_TARGET_EMAIL || 'yuya_inagaki+005@r.recruit.co.jp',
       jobseekerNo: process.env.NEXT_PUBLIC_WEBCALIB_JOBSEEKER_NO || '',
       headless: true
     });
