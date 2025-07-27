@@ -356,6 +356,10 @@ export class WebCalibScraper {
       await this.page.waitForLoadState('networkidle');
       console.log('🎉 メッセージ管理ページに到達しました');
       
+      // デバッグ: メッセージ管理ページ到達後の状態確認
+      console.log('📍 メッセージ管理後のURL:', this.page.url());
+      console.log('📄 メッセージ管理後のページタイトル:', await this.page.title());
+      
     } catch (error) {
       console.error('❌ メッセージ管理ページへの遷移エラー:', error);
       throw error;
@@ -371,18 +375,11 @@ export class WebCalibScraper {
     console.log('📬 メール一覧を取得中...');
     
     try {
-      // メール一覧ページURLを構築
-      const baseListUrl = this.config.listUrl.startsWith('http') 
-        ? this.config.listUrl 
-        : `${this.config.baseUrl}${this.config.listUrl}`;
-        
-      const listUrl = this.config.jobseekerNo 
-        ? `${baseListUrl}?jobseekerNo=${this.config.jobseekerNo}`
-        : baseListUrl;
+      // navigateToMessageManagement()の後、既にメール一覧ページにいるはず
+      console.log('📍 現在のページでメール一覧を取得中...');
+      console.log('🌐 現在のURL:', this.page.url());
       
-      console.log(`🌐 メール一覧アクセス中: ${listUrl}`);
-        
-      await this.page.goto(listUrl);
+      // ページが完全に読み込まれるまで少し待機
       await this.page.waitForLoadState('networkidle');
       
       // デバッグ: メール一覧ページの構造を詳しく調べる
@@ -399,6 +396,22 @@ export class WebCalibScraper {
       // ページタイトル確認
       const pageTitle = await this.page.title();
       console.log('📄 メール一覧ページタイトル:', pageTitle);
+      
+      // エラーページチェック
+      if (pageTitle === 'エラー' || this.page.url().includes('error')) {
+        console.log('❌ エラーページにいます！');
+        
+        // エラーメッセージを取得
+        try {
+          const errorMessage = await this.page.$eval('body', body => body.textContent);
+          console.log('❌ エラーメッセージ:', errorMessage?.substring(0, 200));
+        } catch {
+          console.log('❌ エラーメッセージの取得に失敗');
+        }
+        
+        console.log('💡 メッセージ管理ボタンクリック後、正しいページに到達していない可能性があります');
+        console.log('💡 再度メッセージ管理の流れを確認してください');
+      }
       
       // テーブル要素を全て探す
       try {
@@ -454,9 +467,15 @@ export class WebCalibScraper {
       const mailList = await this.page.evaluate(() => {
         console.log('🔍 JavaScript側でメール一覧を検索中...');
         
-        // パターン1: table.list2（元のパターン）
+        // パターン1: table.list2（画像で確認された実際の構造）
         let table = document.querySelector('table.list2');
         console.log('📊 table.list2の結果:', table ? 'あり' : 'なし');
+        
+        if (table) {
+          console.log('📊 table.list2の詳細情報:');
+          console.log('   - 行数:', table.querySelectorAll('tr').length);
+          console.log('   - セル数例:', table.querySelector('tr')?.querySelectorAll('td, th').length);
+        }
         
         // パターン2: 他のテーブルクラス
         if (!table) {
@@ -544,25 +563,49 @@ export class WebCalibScraper {
           ];
           
           let linkElement = null;
+          let usedSelector = null;
           for (const selector of linkSelectors) {
             linkElement = row.querySelector(selector);
-            if (linkElement) break;
+            if (linkElement) {
+              usedSelector = selector;
+              break;
+            }
           }
           
           if (!linkElement) {
             console.log(`📊 行${index}: リンクが見つかりません`);
+            // デバッグ: この行の全内容を出力
+            console.log(`📊 行${index}の内容:`, row.textContent?.trim());
+            console.log(`📊 行${index}のHTML:`, row.innerHTML);
             return null;
           }
           
-          console.log(`📊 行${index}: リンク発見 - ${linkElement.textContent?.trim()}`);
+          const linkText = linkElement.textContent?.trim() || 'タイトル不明';
+          const linkHref = linkElement.getAttribute('href') || '';
+          
+          console.log(`📊 行${index}: リンク発見 - "${linkText}" (${usedSelector})`);
+          console.log(`📊 行${index}: URL - ${linkHref}`);
+          
+          // 日付抽出の改善
+          let dateText = '日付不明';
+          
+          // 最初のセルが日付の可能性
+          if (cells[0]?.textContent?.trim()) {
+            dateText = cells[0].textContent.trim();
+          } else {
+            // 日付パターンを探す
+            const dateCell = Array.from(cells).find(cell => 
+              cell.textContent?.match(/\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}/)
+            );
+            if (dateCell) {
+              dateText = dateCell.textContent.trim();
+            }
+          }
           
           return {
-            subject: linkElement.textContent?.trim() || 'タイトル不明',
-            href: linkElement.getAttribute('href') || '',
-            date: cells[0]?.textContent?.trim() || 
-                  Array.from(cells).find(cell => 
-                    cell.textContent?.match(/\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}/)
-                  )?.textContent?.trim() || '日付不明'
+            subject: linkText,
+            href: linkHref,
+            date: dateText
           };
         }).filter(Boolean);
       });
