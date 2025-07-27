@@ -1,9 +1,10 @@
-import { chromium, Browser, Page } from 'playwright';
+import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import { InternalMailDTO, ScraperConfig, ScrapeResult } from './types';
 import { parseMailDetail } from './parser';
 
 export class WebCalibScraper {
   private browser: Browser | null = null;
+  private context: BrowserContext | null = null;
   private page: Page | null = null;
   private config: ScraperConfig;
 
@@ -26,7 +27,7 @@ export class WebCalibScraper {
     });
     
     // Internet ExplorerのUser-Agentを設定
-    const context = await this.browser.newContext({
+    this.context = await this.browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko',
       // IE互換性のための追加設定
       viewport: { width: 1366, height: 768 },
@@ -34,7 +35,7 @@ export class WebCalibScraper {
       javaScriptEnabled: true
     });
     
-    this.page = await context.newPage();
+    this.page = await this.context.newPage();
     this.page.setDefaultTimeout(this.config.timeout!);
     
           console.log('🌐 Internet Explorer User-Agent設定完了');
@@ -426,16 +427,32 @@ export class WebCalibScraper {
         try {
           await this.page.waitForSelector(selector, { timeout: 3000 });
           
-          // クリック前のURL記録
+          // 新しいタブが開く可能性があるため、新しいページを監視
+          console.log('🔍 新しいタブの開始を監視中...');
+          
           const beforeUrl = this.page.url();
           console.log(`🔍 クリック前URL: ${beforeUrl}`);
           
-          await this.page.click(selector);
+          // 新しいページ（タブ）が開くのを待機
+          const [newPage] = await Promise.all([
+            this.context!.waitForEvent('page'), // 新しいページを待機
+            this.page.click(selector) // ボタンをクリック
+          ]);
+          
           managementButtonFound = true;
           console.log(`✅ メッセージ管理ボタンクリック完了: ${selector}`);
+          console.log('🎯 新しいタブが開きました！');
+          
+          // 新しいページに切り替え
+          this.page = newPage;
+          await this.page.waitForLoadState('networkidle');
+          
+          const newUrl = this.page.url();
+          const newTitle = await this.page.title();
+          console.log(`📱 新しいタブ情報: "${newTitle}" - ${newUrl}`);
           
           // JavaScriptの実行とページ遷移を待機
-          console.log('⏳ JavaScript実行とページ遷移を待機中...');
+          console.log('⏳ 新しいタブでのページ読み込み完了を待機中...');
           
           // より長い待機時間でページ変化を監視
           let urlChanged = false;
