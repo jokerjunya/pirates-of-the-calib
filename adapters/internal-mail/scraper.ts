@@ -469,6 +469,43 @@ export class WebCalibScraper {
         console.log('⚠️ スクリーンショット保存失敗:', error);
       }
       
+      // 🚀 フレームセット構造の調査
+      try {
+        console.log('🔍 フレームセット構造を調査中...');
+        
+        // フレーム構造の確認
+        const frames = await this.page.frames();
+        console.log(`📦 検出されたフレーム数: ${frames.length}`);
+        
+        for (let i = 0; i < frames.length; i++) {
+          const frame = frames[i];
+          try {
+            const frameUrl = frame.url();
+            const frameTitle = await frame.title();
+            console.log(`  フレーム${i}: URL="${frameUrl}" タイトル="${frameTitle}"`);
+            
+            // 各フレームで「CS通達」「面接」「メール」を検索
+            const frameContent = await frame.content();
+            const hasCS = frameContent.includes('CS通達');
+            const hasInterview = frameContent.includes('面接');
+            const hasMail = frameContent.includes('メール');
+            
+            if (hasCS || hasInterview) {
+              console.log(`🎯 フレーム${i}にメール関連コンテンツを発見！ CS通達:${hasCS} 面接:${hasInterview} メール:${hasMail}`);
+              
+              // このフレームのHTMLを保存
+              const fs = require('fs');
+              fs.writeFileSync(`debug-frame-${i}.html`, frameContent, 'utf8');
+              console.log(`📄 フレーム${i}のHTML保存: debug-frame-${i}.html`);
+            }
+          } catch (frameError) {
+            console.log(`⚠️ フレーム${i}の調査エラー:`, frameError.message);
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ フレーム調査エラー:', error);
+      }
+      
       // 🚀 完全ページHTML取得・保存
       try {
         const fullHTML = await this.page.content();
