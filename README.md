@@ -31,7 +31,54 @@ graph LR
 
 ## 🚀 クイックスタート
 
-### 1. 環境セットアップ
+### 🎯 **3つの簡単起動方法**
+
+<details>
+<summary><b>方法1: 一発起動スクリプト (推奨)</b></summary>
+
+```bash
+# リポジトリクローン
+git clone <repository-url>
+cd calib-hacking
+
+# 🚀 一発セットアップ + 起動
+./start.sh setup    # 初回のみ
+./start.sh quick    # 2回目以降
+```
+
+**特徴:**
+- ✅ 依存関係自動インストール
+- ✅ 環境変数テンプレート自動生成
+- ✅ 環境チェック付き起動
+- ✅ カラフルな進捗表示
+
+</details>
+
+<details>
+<summary><b>方法2: pnpmスクリプト</b></summary>
+
+```bash
+# リポジトリクローン
+git clone <repository-url>
+cd calib-hacking
+
+# 🛠️  セットアップ
+pnpm setup          # 初回のみ
+
+# 🚀 起動
+pnpm quick-start    # 環境チェック + 起動
+pnpm start:all      # フルセットアップ + 起動
+```
+
+**特徴:**
+- ✅ クロスプラットフォーム対応
+- ✅ package.json統合
+- ✅ 環境変数チェック機能
+
+</details>
+
+<details>
+<summary><b>方法3: 手動セットアップ (従来)</b></summary>
 
 ```bash
 # リポジトリクローン
@@ -43,39 +90,55 @@ pnpm install
 
 # Playwright ブラウザインストール  
 pnpm playwright install chromium
-```
 
-### 2. 設定ファイル作成
+# 環境変数設定
+cp .env.example .env.local
+# .env.local を編集して実際の値を設定
 
-`.env.local` ファイルを作成：
-
-```bash
-# Web-CALIB 接続設定 (実際の値で置き換えてください)
-WEBCALIB_BASE_URL=https://rt-calib.r-agent.com
-WEBCALIB_USERNAME=7777319
-WEBCALIB_PASSWORD=password1!
-
-# オプション設定
-WEBCALIB_TARGET_EMAIL=yuya_inagaki+005@r.recruit.co.jp
-WEBCALIB_HEADLESS=true
-WEBCALIB_TIMEOUT=30000
-
-# Next.js アプリケーション設定
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-### 3. 実行
-
-```bash
 # 開発サーバー起動
 pnpm dev
-
-# CLI でスクレイピング実行
-pnpm sync:internal
-
-# ダッシュボード確認
-open http://localhost:3000/sync-dashboard
 ```
+
+</details>
+
+### ⚡ **超高速スタート (30秒)**
+
+```bash
+git clone <repository-url> && cd calib-hacking && ./start.sh setup
+# .env.local を編集 → 必須項目を設定
+./start.sh quick
+```
+
+### 🎯 **起動後のアクセス**
+
+- **📧 ダッシュボード**: http://localhost:3000/sync-dashboard
+- **🎯 デモサイト同期**: 緑色ボタン (設定不要、すぐテスト可能)
+- **🏢 本番サイト同期**: 青色ボタン (要.env.local設定)
+
+---
+
+### 🔧 **環境変数設定 (重要)**
+
+初回セットアップ後、`.env.local` ファイルを編集してください：
+
+```bash
+# 必須設定 (本番サイト同期用)
+WEBCALIB_USERNAME=your_actual_username
+WEBCALIB_PASSWORD=your_actual_password  
+WEBCALIB_TARGET_EMAIL=your_email@example.com
+
+# 🎯 デモサイト同期は設定不要 (自動設定)
+```
+
+### 📱 **利用可能な起動スクリプト** 
+
+| コマンド | 説明 | 初回 | 2回目以降 |
+|----------|------|------|-----------|
+| `./start.sh setup` | 初回セットアップ | ✅ | - |
+| `./start.sh quick` | クイックスタート | - | ✅ |
+| `./start.sh demo` | デモサイト専用起動 | - | ✅ |
+| `pnpm setup` | pnpmセットアップ | ✅ | - |
+| `pnpm quick-start` | pnpm起動 | - | ✅ |
 
 ## 📊 動作実績
 

@@ -11,7 +11,11 @@
     "test": "jest",
     "sync:internal": "tsx adapters/internal-mail/cli.ts",
     "playwright:install": "playwright install",
-    "test:playwright": "playwright test"
+    "test:playwright": "playwright test",
+    "setup": "pnpm install && pnpm playwright:install && node scripts/create-env.cjs",
+    "quick-start": "node scripts/check-env.cjs && pnpm dev",
+    "start:dashboard": "pnpm dev --port 3000",
+    "start:all": "pnpm setup && pnpm start:dashboard"
   },
   "keywords": ["web-calib", "email", "scraping", "playwright"],
   "author": "",
