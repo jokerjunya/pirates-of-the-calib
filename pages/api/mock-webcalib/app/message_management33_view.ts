@@ -1,7 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { loadCompanyEmails, getEmailById } from '../../../../lib/email-data-loader';
 
 /**
  * Web-CALIB メール詳細ページ（message_management33_view）の再現
+ * 編集可能なJSONデータから時系列順でA社選考プロセスの詳細を表示
  * 既存スクレイピングロジックが期待するパスとパラメータ構造に対応
  */
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -11,129 +13,59 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
   const { messageId, messageNo, jobseekerNo } = req.query;
 
-  // デモメール詳細データ（既存のmessage-detail.tsと同じデータ）
-  const demoMailDetails: { [key: string]: any } = {
-    'DEMO001': {
-      id: 'DEMO001',
-      messageNo: '001',
-      subject: '面談日時の件について',
-      from: 'リクルートエージェント <19703@r-agent.com>',
-      to: 'yuya_inagaki+005@r.recruit.co.jp',
-      date: '24/12/25 08:07',
-      body: `
-稲垣様
+  try {
+    // 📅 修正: JSONファイルから時系列順データを読み込み、指定メールIDの詳細を取得
+    const demoMails = loadCompanyEmails('chain_001');
+    const mailDetail = getEmailById(messageId as string, demoMails);
 
-いつもお世話になっております。
-リクルートエージェントの田中です。
-
-先日お話しさせていただいた株式会社〇〇の面談の件でご連絡いたします。
-
-■面談詳細
-日時：2024年12月28日（土）14:00-15:00
-場所：オンライン（Teams）
-面談官：技術部長 山田様
-
-準備していただきたい資料：
-・履歴書・職務経歴書
-・ポートフォリオ
-・質問事項（あれば）
-
-何かご不明な点がございましたら、お気軽にご連絡ください。
-
-よろしくお願いいたします。
-
-リクルートエージェント
-田中 太郎
-`,
-      attachments: []
-    },
-    'DEMO002': {
-      id: 'DEMO002',
-      messageNo: '002',
-      subject: '選考結果のご連絡',
-      from: '株式会社サンプル採用担当 <hr@sample-corp.com>',
-      to: 'yuya_inagaki+005@r.recruit.co.jp',
-      date: '24/12/24 15:30',
-      body: `
-稲垣 雄也様
-
-この度は弊社の選考にご応募いただき、誠にありがとうございました。
-人事部の佐藤です。
-
-先日実施いたしました一次面接の結果についてご連絡いたします。
-
-慎重に検討させていただいた結果、誠に残念ながら今回は見送らせていただくこととなりました。
-
-今回の結果となりました理由は以下の通りです：
-・技術スキルは十分であるものの、今回の求める経験領域とのマッチング
-・チーム開発経験の部分で、より経験豊富な方を優先したこと
-
-なお、今後別のポジションで適性が合致する可能性もございますので、
-その際は改めてご連絡させていただく場合もございます。
-
-末筆ながら、稲垣様の今後のご活躍をお祈り申し上げます。
-
-株式会社サンプル
-人事部 佐藤 花子
-`,
-      attachments: []
-    },
-    'DEMO003': {
-      id: 'DEMO003',
-      messageNo: '003', 
-      subject: '新着求人のご紹介 - エンジニア職',
-      from: 'リクルートエージェント <system@r-agent.com>',
-      to: 'yuya_inagaki+005@r.recruit.co.jp',
-      date: '24/12/23 10:15',
-      body: `
-稲垣様
-
-リクルートエージェントです。
-あなたのご希望に合致する新着求人をご紹介いたします。
-
-■求人情報
-企業名：株式会社テックイノベーション
-職種：フルスタックエンジニア
-年収：500-700万円
-勤務地：東京都渋谷区（リモートワーク可）
-
-■業務内容
-・Webアプリケーションの設計・開発
-・React/Node.js を使用したフロントエンド・バックエンド開発
-・AWSを活用したインフラ構築・運用
-・チーム開発におけるコードレビュー
-
-■求めるスキル
-・JavaScript/TypeScript 実務経験3年以上
-・React.js での開発経験
-・Git を使用したチーム開発経験
-・AWSの基本的な知識
-
-■働き方
-・フレックスタイム制
-・リモートワーク可（週2日出社）
-・副業OK
-
-ご興味がございましたら、お気軽にご連絡ください。
-
-リクルートエージェント
-キャリアアドバイザー 鈴木
-`,
-      attachments: [
-        { name: '求人詳細資料.pdf', size: '245KB' }
-      ]
+    if (!mailDetail) {
+      return res.status(404).send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="Shift_JIS">
+    <title>メールが見つかりません</title>
+    <style>
+        body { font-family: MS PGothic, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; text-align: center; }
+        .error-container { background-color: white; padding: 20px; border: 1px solid #ccc; margin: 50px auto; max-width: 500px; }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <h2>❌ メールが見つかりませんでした</h2>
+        <p>指定されたメールID「${messageId}」は存在しません。</p>
+        <p><a href="/api/mock-webcalib/app/message_management33_list?jobseekerNo=${jobseekerNo}">← メール一覧に戻る</a></p>
+        <p><small>📝 データソース: <code>data/a-company-emails.json</code></small></p>
+    </div>
+</body>
+</html>`);
     }
-  };
 
-  const mailDetail = demoMailDetails[messageId as string];
+    // カテゴリ別アイコンを設定
+    const categoryIcons = {
+      interview_process: '🤝',
+      question_answer: '❓',
+      result_notification: '📋'
+    };
 
-  if (!mailDetail) {
-    return res.status(404).json({ error: 'Mail not found' });
-  }
+    // 緊急度別スタイル
+    const urgencyStyles = {
+      high: 'background: #fff0f0; border-left: 4px solid #ff4444;',
+      normal: 'background: #f8f9fa; border-left: 4px solid #007bff;',
+      low: 'background: #f0f8ff; border-left: 4px solid #28a745;'
+    };
 
-  // Web-CALIBメール詳細画面のHTML構造を再現
-  // 既存パーサーが期待するDOM構造 + URL パラメータ情報を含む
-  const mailDetailHtml = `
+    // フロー情報の解析
+    const [fromRole, toRole] = mailDetail.flow.split('→');
+    const flowDescription = {
+      'RA→CA': 'リクルートエージェント → キャリアアドバイザー',
+      'CA→CS': 'キャリアアドバイザー → 求職者',
+      'CS→CA': '求職者 → キャリアアドバイザー',
+      'CA→RA': 'キャリアアドバイザー → リクルートエージェント'
+    }[mailDetail.flow] || mailDetail.flow;
+
+    // Web-CALIBメール詳細画面のHTML構造を再現
+    const mailDetailHtml = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -141,33 +73,80 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     <title>Web-CALIB メール詳細管理</title>
     <style>
         body { font-family: MS PGothic, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; }
-        .mail-container { background-color: white; padding: 20px; border: 1px solid #ccc; }
+        .mail-container { background-color: white; padding: 20px; border: 1px solid #ccc; border-radius: 4px; }
         .mail-header { border-bottom: 2px solid #0066cc; padding-bottom: 10px; margin-bottom: 20px; }
-        .mail-info { margin-bottom: 10px; }
+        .mail-info { margin-bottom: 10px; padding: 5px 0; }
         .mail-info label { font-weight: bold; color: #333; min-width: 80px; display: inline-block; }
-        .mail-body { border: 1px solid #ddd; padding: 15px; background-color: #fafafa; white-space: pre-wrap; }
-        .attachments { margin-top: 20px; padding: 10px; background-color: #f0f0f0; border: 1px solid #ddd; }
-        .demo-notice { background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; margin-bottom: 20px; }
-        .params-info { background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin-bottom: 20px; font-size: 12px; }
+        .mail-body { border: 1px solid #ddd; padding: 15px; background-color: #fafafa; white-space: pre-wrap; line-height: 1.6; }
+        .attachments { margin-top: 20px; padding: 10px; background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; }
+        .demo-notice { background-color: #e8f5e8; border: 1px solid #4caf50; padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .flow-info { ${urgencyStyles[mailDetail.urgency]} padding: 12px; margin-bottom: 15px; border-radius: 4px; }
+        .category-badge { display: inline-block; background: #007bff; color: white; padding: 3px 8px; border-radius: 12px; font-size: 11px; margin-left: 10px; }
+        .urgency-badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; margin-left: 5px; }
+        .urgency-high { background: #ff4444; color: white; }
+        .urgency-normal { background: #007bff; color: white; }
+        .urgency-low { background: #28a745; color: white; }
+        .navigation { margin-top: 30px; text-align: center; }
+        .nav-button { color: #0066cc; text-decoration: none; padding: 10px 20px; border: 1px solid #0066cc; border-radius: 4px; margin: 0 10px; display: inline-block; }
+        .nav-button:hover { background-color: #0066cc; color: white; }
+        .mail-metadata { background-color: #f8f9fa; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 12px; }
+        .process-timeline { background-color: #fff; border: 1px solid #dee2e6; padding: 12px; margin-bottom: 15px; border-radius: 4px; }
+        .data-source-info { background-color: #d1ecf1; border: 1px solid #bee5eb; padding: 12px; margin-bottom: 15px; border-radius: 4px; font-size: 12px; }
     </style>
 </head>
 <body>
     <div class="demo-notice">
-        <strong>📧 デモメール詳細 (message_management33_view):</strong> 
-        messageId: ${messageId}, jobseekerNo: ${jobseekerNo}
+        <strong>🎯 A社選考プロセス詳細（編集可能）:</strong> 
+        ${categoryIcons[mailDetail.category]} ${mailDetail.category.toUpperCase()}
+        | messageId: <code>${messageId}</code> 
+        | Step: <strong>${mailDetail.step}/11</strong>
+        | jobseekerNo: <code>${jobseekerNo}</code>
+        <br>
+        <small>💡 編集可能なJSONファイルから読み込まれたリアルな業務メールです</small>
     </div>
 
-    <div class="params-info">
-        <strong>🔗 URL パラメータ情報:</strong><br>
-        messageId: ${messageId}<br>
-        messageNo: ${messageNo}<br>
-        jobseekerNo: ${jobseekerNo}<br>
-        <em>※ 既存スクレイピングロジックがこれらの情報を使用します</em>
+    <div class="data-source-info">
+        <strong>📝 データソース:</strong> 
+        <code>data/a-company-emails.json</code> - このメールの内容を変更したい場合はJSONファイルを編集してください
+        <br>
+        <small>📅 時系列順表示: メール全体が古い順に整理されています</small>
+    </div>
+
+    <div class="flow-info">
+        <strong>📧 メールフロー詳細:</strong><br>
+        フロー: <strong>${flowDescription}</strong> 
+        <span class="urgency-badge urgency-${mailDetail.urgency}">
+            ${mailDetail.urgency === 'high' ? '⚡ 緊急' : mailDetail.urgency === 'low' ? '📅 通常' : '📋 標準'}
+        </span>
+        <br>
+        ステップ: <strong>${mailDetail.step}/11</strong> | 
+        企業: <strong>${mailDetail.companyName}</strong> | 
+        職種: <strong>システムエンジニア</strong>
+    </div>
+
+    <div class="process-timeline">
+        <strong>📈 選考プロセスの位置づけ:</strong><br>
+        <small>
+        ${mailDetail.step <= 3 ? '🔵 初期質問フェーズ' : 
+          mailDetail.step <= 6 ? '🟡 詳細確認フェーズ' : 
+          mailDetail.step <= 10 ? '🟠 追加質問フェーズ' : 
+          '🟢 結果通知フェーズ'}
+        (${mailDetail.step}/11ステップ)
+        </small>
     </div>
 
     <div class="mail-container">
         <div class="mail-header">
             <h2>メッセージ管理 - 詳細表示</h2>
+            <span class="category-badge">${categoryIcons[mailDetail.category]} ${mailDetail.category.toUpperCase()}</span>
+        </div>
+
+        <!-- メール基本情報 -->
+        <div class="mail-metadata">
+            <strong>📊 メール情報:</strong>
+            作成日時: ${mailDetail.createDate} | 処理日時: ${mailDetail.processDate} | サイズ: ${mailDetail.size} | 
+            状態: ${mailDetail.status === '未読' ? '🔔 未読' : '📖 既読'} | 
+            緊急度: ${mailDetail.urgency === 'high' ? '⚡ 緊急' : mailDetail.urgency === 'low' ? '📅 低' : '📋 標準'}
         </div>
 
         <!-- 既存パーサーが期待するメール情報構造 -->
@@ -189,12 +168,17 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
         <!-- Hidden inputs（Web-CALIBの特徴的な構造 + URL情報） -->
         <input type="hidden" name="messageId" value="${mailDetail.id}">
-        <input type="hidden" name="messageNo" value="${mailDetail.messageNo}">
+        <input type="hidden" name="messageNo" value="${messageNo}">
         <input type="hidden" name="jobseekerNo" value="${jobseekerNo}">
         <input type="hidden" name="subject" value="${mailDetail.subject}">
         <input type="hidden" name="from" value="${mailDetail.from}">
         <input type="hidden" name="to" value="${mailDetail.to}">
         <input type="hidden" name="date" value="${mailDetail.date}">
+        <input type="hidden" name="category" value="${mailDetail.category}">
+        <input type="hidden" name="step" value="${mailDetail.step}">
+        <input type="hidden" name="flow" value="${mailDetail.flow}">
+        <input type="hidden" name="urgency" value="${mailDetail.urgency}">
+        <input type="hidden" name="companyName" value="${mailDetail.companyName}">
 
         <!-- メール本文 -->
         <div class="mail-body">
@@ -206,27 +190,78 @@ ${mailDetail.body}
         <div class="attachments">
             <h4>📎 添付ファイル</h4>
             ${mailDetail.attachments.map(att => `
-            <div style="margin: 5px 0;">
-                <span>📄 ${att.name} (${att.size})</span>
+            <div style="margin: 8px 0; padding: 8px; background: white; border-radius: 3px;">
+                <span>📄 <strong>${att.name}</strong> (${att.size})</span>
+                <button style="margin-left: 10px; padding: 2px 8px; font-size: 11px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                    ダウンロード
+                </button>
             </div>
             `).join('')}
         </div>
         ` : ''}
 
-        <div style="margin-top: 30px; text-align: center;">
+        <div class="navigation">
             <a href="/api/mock-webcalib/app/message_management33_list?jobseekerNo=${jobseekerNo}" 
-               style="color: #0066cc; text-decoration: none; padding: 10px 20px; border: 1px solid #0066cc;">
+               class="nav-button">
                ← メッセージ一覧に戻る
             </a>
+            <a href="#" onclick="window.print(); return false;" class="nav-button">
+               🖨️ 印刷
+            </a>
+            ${mailDetail.step > 1 ? `
+            <a href="/api/mock-webcalib/app/message_management33_view?messageId=REAL${String(mailDetail.step - 1).padStart(3, '0')}&messageNo=${String(mailDetail.step - 1).padStart(3, '0')}&jobseekerNo=${jobseekerNo}" 
+               class="nav-button">
+               ← 前のメール
+            </a>
+            ` : ''}
+            ${mailDetail.step < 11 ? `
+            <a href="/api/mock-webcalib/app/message_management33_view?messageId=REAL${String(mailDetail.step + 1).padStart(3, '0')}&messageNo=${String(mailDetail.step + 1).padStart(3, '0')}&jobseekerNo=${jobseekerNo}" 
+               class="nav-button">
+               次のメール →
+            </a>
+            ` : ''}
         </div>
     </div>
 
     <div style="margin-top: 20px; color: #666; font-size: 12px; text-align: center;">
-        <p>※ これはWeb-CALIBデモサイト（message_management33_view）です。</p>
+        <p><strong>🔄 編集可能A社選考プロセス詳細:</strong></p>
+        <ul style="list-style: none; padding: 0; margin: 5px 0;">
+            <li>• カテゴリ: ${mailDetail.category} (${categoryIcons[mailDetail.category]})</li>
+            <li>• フロー: ${flowDescription}</li>
+            <li>• ステップ: ${mailDetail.step}/11 - ${mailDetail.step <= 3 ? '初期質問' : mailDetail.step <= 6 ? '詳細確認' : mailDetail.step <= 10 ? '追加質問' : '結果通知'}フェーズ</li>
+            <li>• データソース: <code>data/a-company-emails.json</code>（編集可能）</li>
+            <li>• 時系列: 古い順に整理されたメールチェーン</li>
+        </ul>
+        <p><small>※ これは編集可能なWeb-CALIBデモサイト（message_management33_view）です。</small></p>
     </div>
 </body>
 </html>`;
 
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.status(200).send(mailDetailHtml);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(200).send(mailDetailHtml);
+
+  } catch (error) {
+    console.error('❌ メール詳細データの読み込みに失敗:', error);
+    res.status(500).send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="Shift_JIS">
+    <title>エラー - データ読み込み失敗</title>
+    <style>
+        body { font-family: MS PGothic, sans-serif; background-color: #f0f0f0; margin: 0; padding: 20px; text-align: center; }
+        .error-container { background-color: white; padding: 20px; border: 1px solid #ccc; margin: 50px auto; max-width: 600px; }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <h2>❌ メール詳細データの読み込みに失敗しました</h2>
+        <p>JSONファイル <code>data/a-company-emails.json</code> の読み込みでエラーが発生しました。</p>
+        <p><strong>エラー詳細:</strong> ${error instanceof Error ? error.message : String(error)}</p>
+        <p>messageId: <code>${messageId}</code></p>
+        <p><a href="/api/mock-webcalib/app/message_management33_list?jobseekerNo=${jobseekerNo}">← メール一覧に戻る</a></p>
+    </div>
+</body>
+</html>`);
+  }
 } 

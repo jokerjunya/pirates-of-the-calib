@@ -38,7 +38,7 @@ function loadEnvFile() {
   const envContent = fs.readFileSync(envPath, 'utf8');
   const envVars = {};
   
-  envContent.split('\\n').forEach(line => {
+  envContent.split('\n').forEach(line => {
     const trimmed = line.trim();
     if (trimmed && !trimmed.startsWith('#')) {
       const [key, ...valueParts] = trimmed.split('=');
@@ -60,15 +60,39 @@ function checkEnvironment() {
   let hasErrors = false;
   let hasWarnings = false;
   
+  // デバッグ情報（詳細モード）
+  if (process.argv.includes('--debug')) {
+    console.log('🐛 デバッグ情報:');
+    console.log(`   .env.local パス: ${path.join(process.cwd(), '.env.local')}`);
+    console.log(`   読み込み変数数: ${Object.keys(envVars).length}`);
+    console.log('   読み込み変数一覧:');
+    Object.keys(envVars).forEach(key => {
+      const value = envVars[key];
+      const displayValue = key.includes('PASSWORD') ? '***隠された***' : 
+                          value.length > 30 ? value.substring(0, 30) + '...' : value;
+      console.log(`     ${key}=${displayValue}`);
+    });
+    console.log('');
+  }
+  
   // 必須変数チェック
   console.log('✅ 必須環境変数:');
   REQUIRED_VARS.forEach(varName => {
     const value = envVars[varName];
     if (!value || value === 'your_username_here' || value === 'your_password_here' || value === 'your_email@example.com') {
       console.log(`   ❌ ${varName}: 未設定または初期値のまま`);
+      if (process.argv.includes('--debug')) {
+        console.log(`      実際の値: "${value || '(空)'}"`);
+        console.log(`      値の長さ: ${(value || '').length} 文字`);
+      }
       hasErrors = true;
     } else {
       console.log(`   ✅ ${varName}: 設定済み`);
+      if (process.argv.includes('--debug')) {
+        const displayValue = varName.includes('PASSWORD') ? '***隠された***' : 
+                            value.length > 20 ? value.substring(0, 20) + '...' : value;
+        console.log(`      値: "${displayValue}" (${value.length} 文字)`);
+      }
     }
   });
   
@@ -80,9 +104,17 @@ function checkEnvironment() {
     const value = envVars[varName];
     if (!value || value === 'your_username_here' || value === 'your_password_here' || value === 'your_email@example.com') {
       console.log(`   ⚠️  ${varName}: 未設定 (推奨)`);
+      if (process.argv.includes('--debug')) {
+        console.log(`      実際の値: "${value || '(空)'}"`);
+      }
       hasWarnings = true;
     } else {
       console.log(`   ✅ ${varName}: 設定済み`);
+      if (process.argv.includes('--debug')) {
+        const displayValue = varName.includes('PASSWORD') ? '***隠された***' : 
+                            value.length > 20 ? value.substring(0, 20) + '...' : value;
+        console.log(`      値: "${displayValue}" (${value.length} 文字)`);
+      }
     }
   });
   
@@ -95,6 +127,10 @@ function checkEnvironment() {
     console.log('   1. .env.local ファイルを開く');
     console.log('   2. 必須項目に実際の値を設定');
     console.log('   3. 再度 pnpm quick-start を実行');
+    console.log('');
+    console.log('💡 ヒント:');
+    console.log('   - 詳細なデバッグ情報: node scripts/check-env.cjs --debug');
+    console.log('   - 環境変数テンプレート再作成: node scripts/create-env.cjs');
     console.log('');
     process.exit(1);
   }
